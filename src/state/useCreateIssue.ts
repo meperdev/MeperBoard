@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { queryKeys } from "./query-keys";
+import type { GithubItem, RepoId } from "../data/types";
+import { invalidateIssueWrites, writeIssueIntoMirror } from "./updateIssue";
 import { useActiveRepo } from "./use-repos";
 import { DEFAULT_REPO } from "./useSync";
 
@@ -83,14 +84,17 @@ async function readJson(response: Response): Promise<unknown> {
  *
  * The repo comes from the same `useActiveRepo` source as the read path, falling
  * back to the default tracked repo when none is selected. Failures are thrown
- * with a friendly, status-mapped message for the dialog to render; success
- * invalidates the derived reads so board/backlog/detail refetch.
+ * with a friendly, status-mapped message for the dialog to render.
+ *
+ * The 201 response IS the created issue: it is mapped with the sync connector
+ * and upserted into the mirror that board/backlog/detail read, so the new issue
+ * appears immediately instead of waiting for a manual sync.
  */
 export function useCreateIssue(options: CreateIssueOptions = {}) {
   const queryClient = useQueryClient();
   const activeRepo = useActiveRepo();
 
-  return useMutation<CreatedIssue, Error, CreateIssueInput>({
+  return useMutation<GithubItem, Error, CreateIssueInput>({
     mutationFn: async ({ title, body }) => {
       const trimmedTitle = title.trim();
       if (!trimmedTitle) {
@@ -98,6 +102,7 @@ export function useCreateIssue(options: CreateIssueOptions = {}) {
       }
 
       const repo = activeRepo.data ?? DEFAULT_REPO;
+      const repoId: RepoId = `${repo.owner}/${repo.name}`;
       const fetcher = options.fetcher ?? createIssueProxyFetcher;
       const response = await fetcher(
         `${GITHUB_API_ORIGIN}/repos/${repo.owner}/${repo.name}/issues`,
@@ -112,12 +117,8 @@ export function useCreateIssue(options: CreateIssueOptions = {}) {
         throw new Error(createIssueErrorMessage(response.status, await readJson(response)));
       }
 
-      return (await readJson(response)) as CreatedIssue;
+      return writeIssueIntoMirror(repoId, await readJson(response));
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.board });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.backlog });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.issueDetail });
-    },
+    onSuccess: () => invalidateIssueWrites(queryClient),
   });
 }

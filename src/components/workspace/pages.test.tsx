@@ -17,6 +17,26 @@ import {
 import { BacklogPage } from "./backlog-page";
 import { IssuePage } from "./issue-page";
 
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+/** One issue as the MeperPOS issues endpoint returns it. */
+const issuePayloads = [
+  {
+    number: 1,
+    title: "Expenses slice 1",
+    body: "",
+    state: "open",
+    html_url: "https://github.com/meperdonas/meperpos/issues/1",
+    updated_at: "2026-08-01T00:00:00Z",
+    labels: [],
+  },
+];
+
 describe("BacklogPage", () => {
   beforeEach(resetDb);
 
@@ -26,6 +46,31 @@ describe("BacklogPage", () => {
 
     await waitFor(() => expect(screen.getByRole("region", { name: "Backlog" })).toBeInTheDocument());
     expect(screen.getByRole("link", { name: "MeperBoard" })).toHaveAttribute("href", "/");
+  });
+
+  it("auto-syncs on load when the last successful sync is stale", async () => {
+    window.localStorage.clear();
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : (input as Request).url;
+      if (url === "/api/auth/me") return Promise.resolve(jsonResponse({}, 401));
+      return Promise.resolve(jsonResponse(issuePayloads));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const client = createTestQueryClient();
+      render(<BacklogPage />, { wrapper: queryWrapper(client) });
+
+      // The mirrored issue shows up without a Sync click.
+      await waitFor(() => expect(screen.getByText("Expenses slice 1")).toBeInTheDocument());
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/github/repos/MeperDonas/MeperPOS/issues?state=all&per_page=100",
+      );
+    } finally {
+      vi.unstubAllGlobals();
+      window.localStorage.clear();
+    }
   });
 });
 

@@ -20,7 +20,7 @@ import {
 } from "../../lib/local-cards-collapsed";
 import { SPRING_RAIL } from "../../lib/motion";
 import { useMinWidth } from "../../lib/use-min-width";
-import { useBacklog, useLocalCards, useMoveCard, useResetCardMove, useSync, type Card } from "../../state";
+import { useBacklog, useAutoSync, useLocalCards, useMoveCard, useResetCardMove, type Card } from "../../state";
 import { TOGGLE_LOCAL_CARDS_EVENT } from "../app-header/command-palette";
 import { AppHeader } from "../app-header/app-header";
 import { Badge } from "../ui/badge";
@@ -46,6 +46,9 @@ export function BoardWorkspace() {
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<"all" | "issue" | "pull" | "local" | "critical">("all");
+
+  // S9: refresh the mirror on load when the last sync went stale (>30 min).
+  useAutoSync();
 
   const { data: allCards = [] } = useBacklog();
   const moveCard = useMoveCard();

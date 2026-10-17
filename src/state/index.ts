@@ -35,6 +35,7 @@ export {
   type RepoRef,
 } from "./use-repos";
 export { DEFAULT_REPO, proxyFetcher, useSync, type SyncOptions } from "./useSync";
+export { useAutoSync } from "./useAutoSync";
 export {
   useCreateIssue,
   type CreateIssueInput,
