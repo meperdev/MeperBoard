@@ -20,7 +20,7 @@
 
 ## Tasks
 
-- [x] **T1 — Proxy write core**: gate `WRITE_MODE` + `WRITE_ALLOWED_USERS` + allowlist de escritura + forwarding de body + retry con body + tests (inline, TDD). Commit: este commit del branch (re-creado tras un restore del workspace; RED 28 → GREEN 73 focales; suite 452/452).
+- [x] **T1 — Proxy write core**: gate `WRITE_MODE` + `WRITE_ALLOWED_USERS` + allowlist de escritura + forwarding de body + retry con body + tests (inline, TDD). Commit: este commit del branch (re-creado tras un restore del workspace; RED 28 → GREEN 73 focales; suite 452/452). Review nativo: APPROVED + acknowledged (L7).
 - [ ] **T2 — UI crear issue** (modal en board + backlog).
 - [ ] **T3 — UI comentar** desde issue detail/drawer.
 - [ ] **T4 — UI cerrar/reabrir**.
@@ -36,3 +36,10 @@
 - **L4** — Nota: el remoto se movió a `meperdev/MeperBoard` (GitHub redirect); actualizar `origin` cuando el dueño decida.
 - **L5** — T1 implementado con TDD: 28 tests en RED → 73/73 focales en GREEN, suite completa 452/452, typecheck limpio. Gate opt-in `WRITE_MODE=enabled`; gate por login `WRITE_ALLOWED_USERS`; allowlist estricta de issues (create/comment/PATCH); 403 de escritura passthrough (los GET siguen remapeando a sync-paused); body reenviado en el retry de 401.
 - **L6** — Nota de entorno: el workspace se restauró a mitad de camino y el commit original del T1 se perdió; los cambios sobrevivieron sin commitear y se recommiteó el mismo contenido. El review nativo corre sobre el commit nuevo (sha nuevo).
+- **L7** — Review nativo completo: assess del commit re-creado dio `medium`/`under_budget` (inconsistente con el `high_risk` original del mismo contenido) → re-assess con `--escalate-item 2` (security guard) → `high`/`high_risk`. Consent del dueño → START congelado (lineage `review-0de683e364ac7b1a`, target `sha256:5ea77509…`, 2 lentes: risk + resilience). Resultado: **APPROVED** (5 hallazgos no bloqueantes). Acknowledgement exacto ejecutado → autoridad **quemada** (`gentle-ai.review-acknowledged/v1`, revisión consumida `sha256:4c9e600449a4c87bc3ff853941256e61fb1c91872d6ce8df3a797bb540f5aa66`). Ciclo de review cerrado; entrega = decisión humana.
+- **L8** — Advisories del review (NO bloqueantes — trabajo futuro separado, no reabren este candidato):
+  1. `R1-write-body-uncapped` (WARNING, risk) — el body de escritura se bufferiza sin tope de tamaño (route.ts:152-153); sugerencia: límite de tamaño.
+  2. `R4-1` (WARNING, resilience) — un 403 de rate-limit en escrituras se pasa como error de permiso (proxy.ts:219); sugerencia: detectar rate-limit (`x-ratelimit-remaining`/`retry-after`) y anotar.
+  3. `R4-2` (WARNING, resilience) — el retry por 401 re-ejecuta escrituras no idempotentes (route.ts:184); sugerencia: idempotency key o replay solo para GET.
+  4. `R1-proxy-write-no-path-recheck` (SUGGESTION, risk) — defense in depth: repetir la allowlist dentro de `proxyGithubRequest` (proxy.ts:194-201).
+  5. `R4-3` (SUGGESTION, resilience) — gate de escritura silencioso: `WRITE_MODE` mal escrito falla sin log (proxy.ts:43); sugerencia: log del modo resuelto o error distinto.
