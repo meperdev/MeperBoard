@@ -7,6 +7,9 @@ import {
   isAllowedMethod,
   isAllowedOrigin,
   isAllowedPath,
+  isAllowedWritePath,
+  isUserAllowedToWrite,
+  isWriteModeEnabled,
   proxyGithubRequest,
   resolveToken,
 } from "./proxy";
@@ -41,9 +44,11 @@ describe("buildGithubApiUrl", () => {
 });
 
 describe("isAllowedMethod", () => {
-  it("allows only GET", () => {
+  it("allows GET and the gated write methods, rejects the rest", () => {
     expect(isAllowedMethod("GET")).toBe(true);
-    for (const method of ["POST", "PATCH", "PUT", "DELETE"]) {
+    expect(isAllowedMethod("POST")).toBe(true);
+    expect(isAllowedMethod("PATCH")).toBe(true);
+    for (const method of ["PUT", "DELETE", "HEAD"]) {
       expect(isAllowedMethod(method)).toBe(false);
     }
   });
@@ -113,6 +118,19 @@ describe("isAllowedPath", () => {
     expect(isAllowedPath(["repositories", "1148441904", "issues", "21"])).toBe(true);
   });
 
+  it("allows repos/{owner}/{repo}/labels for the label editor", () => {
+    expect(isAllowedPath(["repos", "meperdonas", "meperboard", "labels"])).toBe(true);
+  });
+
+  it("allows the repository-id labels form for the same read", () => {
+    expect(isAllowedPath(["repositories", "1148441904", "labels"])).toBe(true);
+  });
+
+  it("still rejects unknown resources in both repo forms", () => {
+    expect(isAllowedPath(["repos", "meperdonas", "meperboard", "milestones"])).toBe(false);
+    expect(isAllowedPath(["repositories", "1148441904", "milestones"])).toBe(false);
+  });
+
   it("rejects the repository-id form for non-issue/pull resources", () => {
     expect(isAllowedPath(["repositories", "1148441904", "comments"])).toBe(false);
     expect(isAllowedPath(["repositories", "1148441904"])).toBe(false);
@@ -140,8 +158,69 @@ describe("isAllowedPath", () => {
   });
 });
 
+describe("isWriteModeEnabled", () => {
+  it("is opt-in: only the literal 'enabled' turns writes on", () => {
+    expect(isWriteModeEnabled({ WRITE_MODE: "enabled" })).toBe(true);
+    expect(isWriteModeEnabled({ WRITE_MODE: "on" })).toBe(false);
+    expect(isWriteModeEnabled({ WRITE_MODE: "1" })).toBe(false);
+    expect(isWriteModeEnabled({})).toBe(false);
+  });
+});
+
+describe("isUserAllowedToWrite", () => {
+  it("allows any authenticated login when the allowlist is absent or empty", () => {
+    expect(isUserAllowedToWrite("meperdonas", undefined)).toBe(true);
+    expect(isUserAllowedToWrite("meperdonas", "")).toBe(true);
+    expect(isUserAllowedToWrite("meperdonas", "  ,  ")).toBe(true);
+  });
+
+  it("restricts writes to the listed logins, case-insensitive", () => {
+    expect(isUserAllowedToWrite("MeperDonas", "meperdonas, other")).toBe(true);
+    expect(isUserAllowedToWrite("someone-else", "meperdonas")).toBe(false);
+  });
+
+  it("does not apply without a session login (PAT self-host)", () => {
+    expect(isUserAllowedToWrite(undefined, "meperdonas")).toBe(true);
+  });
+});
+
+describe("isAllowedWritePath", () => {
+  it("allows creating an issue (POST repos/{o}/{r}/issues)", () => {
+    expect(isAllowedWritePath(["repos", "a", "b", "issues"], "POST")).toBe(true);
+  });
+
+  it("allows commenting (POST repos/{o}/{r}/issues/{n}/comments)", () => {
+    expect(isAllowedWritePath(["repos", "a", "b", "issues", "7", "comments"], "POST")).toBe(true);
+  });
+
+  it("allows updating an issue (PATCH repos/{o}/{r}/issues/{n})", () => {
+    expect(isAllowedWritePath(["repos", "a", "b", "issues", "7"], "PATCH")).toBe(true);
+  });
+
+  it("rejects non-numeric issue numbers", () => {
+    expect(isAllowedWritePath(["repos", "a", "b", "issues", "abc"], "PATCH")).toBe(false);
+    expect(isAllowedWritePath(["repos", "a", "b", "issues", "7x", "comments"], "POST")).toBe(false);
+  });
+
+  it("never writes to pull requests", () => {
+    expect(isAllowedWritePath(["repos", "a", "b", "pulls"], "POST")).toBe(false);
+    expect(isAllowedWritePath(["repos", "a", "b", "pulls", "7"], "PATCH")).toBe(false);
+  });
+
+  it("rejects the repository-id form and other methods", () => {
+    expect(isAllowedWritePath(["repositories", "123", "issues"], "POST")).toBe(false);
+    expect(isAllowedWritePath(["repos", "a", "b", "issues"], "PUT")).toBe(false);
+    expect(isAllowedWritePath(["repos", "a", "b", "issues", "7"], "DELETE")).toBe(false);
+  });
+
+  it("rejects PATCH on the comments sub-path and POST on the single-issue path", () => {
+    expect(isAllowedWritePath(["repos", "a", "b", "issues", "7", "comments"], "PATCH")).toBe(false);
+    expect(isAllowedWritePath(["repos", "a", "b", "issues", "7"], "POST")).toBe(false);
+  });
+});
+
 describe("proxyGithubRequest", () => {
-  it("rejects non-GET methods without calling the fetcher", async () => {
+  it("keeps read-only by default: POST without allowWrites is 405 and never calls the fetcher", async () => {
     const fetcher = vi.fn();
     const result = await proxyGithubRequest({
       path: ["repos", "a", "b", "issues"],
@@ -151,7 +230,75 @@ describe("proxyGithubRequest", () => {
     });
 
     expect(result.status).toBe(405);
+    expect(result.headers.allow).toBe("GET");
     expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("rejects PUT even with writes enabled (only POST/PATCH pass)", async () => {
+    const fetcher = vi.fn();
+    const result = await proxyGithubRequest({
+      path: ["repos", "a", "b", "issues", "7"],
+      method: "PUT",
+      token: null,
+      fetcher,
+      allowWrites: true,
+    });
+
+    expect(result.status).toBe(405);
+    expect(result.headers.allow).toBe("GET, POST, PATCH");
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("forwards a POST body verbatim with content-type json when writes are enabled", async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ number: 7 }), { status: 201 }));
+    const result = await proxyGithubRequest({
+      path: ["repos", "a", "b", "issues"],
+      method: "POST",
+      token: "pat",
+      body: JSON.stringify({ title: "Hola" }),
+      fetcher,
+      allowWrites: true,
+    });
+
+    expect(result.status).toBe(201);
+    const [url, init] = fetcher.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`${GITHUB_API_BASE}/repos/a/b/issues`);
+    expect(init.method).toBe("POST");
+    expect((init.headers as Record<string, string>)["content-type"]).toBe("application/json");
+    expect((init.headers as Record<string, string>).authorization).toBe("Bearer pat");
+    expect(init.body).toBe(JSON.stringify({ title: "Hola" }));
+  });
+
+  it("passes an upstream 403 through for writes instead of remapping to sync-paused", async () => {
+    const fetcher = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ message: "Resource not accessible by integration" }), { status: 403 }),
+    );
+    const result = await proxyGithubRequest({
+      path: ["repos", "a", "b", "issues"],
+      method: "POST",
+      token: "pat",
+      body: "{}",
+      fetcher,
+      allowWrites: true,
+    });
+
+    expect(result.status).toBe(403);
+    expect(result.body).toMatchObject({ message: "Resource not accessible by integration" });
+  });
+
+  it("still remaps an upstream 429 to sync-paused for writes", async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response("{}", { status: 429 }));
+    const result = await proxyGithubRequest({
+      path: ["repos", "a", "b", "issues"],
+      method: "POST",
+      token: "pat",
+      body: "{}",
+      fetcher,
+      allowWrites: true,
+    });
+
+    expect(result.status).toBe(429);
+    expect(result.body).toMatchObject({ error: "sync paused", rate_limited: true });
   });
 
   it("forwards GET with the bearer token and accept headers", async () => {

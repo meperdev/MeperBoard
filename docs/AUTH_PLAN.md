@@ -171,7 +171,7 @@ a la hora 8. La sesión se mantiene así:
 
 1. **Origin check**: Solo acepta requests cuyo `Origin` o `Referer` coincida con el dominio de la app.
 2. **Cookie required**: Sin cookie `__session` válida → `401 Unauthorized`.
-3. **Path allowlist** (opcional pero recomendado): Solo rutas que el sync necesita (`repos/{owner}/{repo}/issues`, `repos/{owner}/{repo}/pulls`).
+3. **Path allowlist** (opcional pero recomendado): Solo las rutas que la app necesita (`repos/{owner}/{repo}/issues`, `repos/{owner}/{repo}/pulls` y `repos/{owner}/{repo}/labels`, el catálogo del editor de labels).
 4. **Se elimina `GITHUB_TOKEN` del env** en producción — cada request usa el token del usuario autenticado.
 
 ### CSP con Nonce (Obligatoria para Next.js)

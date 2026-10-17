@@ -71,7 +71,7 @@ export function AuthMenu({ user, activeRepo, activeRepos, onLogout, onClose }: A
             </span>
             <span className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary ring-1 ring-primary/20">
               <ShieldCheck className="h-2.5 w-2.5" />
-              Read-only
+              Read-only by default
             </span>
           </div>
         </div>

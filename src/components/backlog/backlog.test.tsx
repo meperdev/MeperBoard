@@ -256,4 +256,19 @@ describe("Backlog pagination", () => {
       expect(screen.getByRole("button", { name: "Sync with GitHub" })).toBeInTheDocument(),
     );
   });
+
+  it("opens the create-issue dialog from the backlog toolbar", async () => {
+    renderBacklog();
+
+    await waitFor(() =>
+      expect(screen.getByRole("region", { name: "Backlog" })).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "New issue" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("dialog", { name: "New issue" })).toBeInTheDocument(),
+    );
+    expect(screen.getByLabelText("Title")).toBeInTheDocument();
+  });
 });

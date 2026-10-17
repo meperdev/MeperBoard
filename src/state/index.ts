@@ -35,6 +35,27 @@ export {
   type RepoRef,
 } from "./use-repos";
 export { DEFAULT_REPO, proxyFetcher, useSync, type SyncOptions } from "./useSync";
+export { useAutoSync } from "./useAutoSync";
+export {
+  useCreateIssue,
+  type CreateIssueInput,
+  type CreatedIssue,
+} from "./useCreateIssue";
+export {
+  useCreateComment,
+  type CreateCommentInput,
+} from "./useCreateComment";
+export { useSetIssueState, type IssueState } from "./useSetIssueState";
+export {
+  SET_ISSUE_LABELS_FAILED_MESSAGE,
+  useRepoLabels,
+  useSetIssueLabels,
+  type RepoLabel,
+} from "./useSetIssueLabels";
+export {
+  useIssueComments,
+  type IssueComment,
+} from "./useIssueComments";
 export { useLocalCards, type LocalCardInput, type LocalCardsOptions } from "./useLocalCards";
 export { useMoveCard, useResetCardMove } from "./useMoveCard";
 export {

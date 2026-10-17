@@ -79,8 +79,9 @@ export function ConnectModal({ onClose }: ConnectModalProps) {
           <div className="mt-4 flex items-start gap-3 rounded-xl border border-border/70 bg-elevated/70 p-3.5 shadow-xs">
             <Shield className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
             <p className="text-xs leading-relaxed text-muted-foreground">
-              <strong className="font-semibold text-foreground">Read-only access.</strong> MeperBoard only reads
-              issues and pull requests in the repositories you grant. It cannot write or modify your code.
+              <strong className="font-semibold text-foreground">Read-only by default.</strong> MeperBoard reads
+              issues and pull requests in the repositories you grant. When the deployment enables writes, the
+              explicit actions you take — create, comment, close/reopen, labels — run as you.
             </p>
           </div>
 

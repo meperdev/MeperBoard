@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { githubItemRepo, repoRepo } from "../data/repositories";
 import type { RepoId } from "../data/types";
 import { GitHubConnector } from "../domain/sync/connector";
+import { saveLastSync } from "../lib/last-sync";
 import { queryKeys } from "./query-keys";
 
 const GITHUB_API_ORIGIN = "https://api.github.com";
@@ -36,6 +37,9 @@ export function proxyFetcher(url: string): Promise<Response> {
  * invalidates every derived read so the board/backlog/detail reflect the new
  * mirror. Local cards are intentionally NOT invalidated — sync never touches
  * them.
+ *
+ * A successful sync also records its timestamp (`src/lib/last-sync.ts`) so the
+ * load-time auto-sync (`useAutoSync`) can tell when the mirror went stale.
  *
  * When multiple repos are active, syncs each active repo sequentially.
  * An explicit `owner`/`name` option always wins.
@@ -79,6 +83,7 @@ export function useSync(options: SyncOptions = {}) {
       };
     },
     onSuccess: () => {
+      saveLastSync(Date.now());
       void queryClient.invalidateQueries({ queryKey: queryKeys.board });
       void queryClient.invalidateQueries({ queryKey: queryKeys.backlog });
       void queryClient.invalidateQueries({ queryKey: queryKeys.issueDetail });

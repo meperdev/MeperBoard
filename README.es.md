@@ -27,7 +27,7 @@ Sincronización de solo lectura con GitHub, almacenamiento offline-first, UX pen
   <img alt="React" src="https://img.shields.io/badge/React-19-blue?logo=react">
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-7-blue?logo=typescript">
   <img alt="Tailwind CSS" src="https://img.shields.io/badge/Tailwind-4-38bdf8?logo=tailwindcss">
-  <img alt="Vitest" src="https://img.shields.io/badge/tests-381%20passing-22c55e?logo=vitest">
+  <img alt="Vitest" src="https://img.shields.io/badge/tests-537%20passing-22c55e?logo=vitest">
   <img alt="License MIT" src="https://img.shields.io/badge/licencia-MIT-a78bfa?logo=opensourceinitiative">
 </p>
 
@@ -49,10 +49,10 @@ Sincronización de solo lectura con GitHub, almacenamiento offline-first, UX pen
 ### Local-first y privado
 - **Almacenamiento offline-first** en [IndexedDB](https://dexie.org/) vía Dexie. Tus datos son tuyos, en tu máquina.
 - **Tarjetas locales** que la sincronización de GitHub nunca toca — creá, editá y borrá tarjetas que se mantienen mientras sincronizás.
-- **Sincronización de solo lectura** — MeperBoard *nunca* escribe a GitHub. Espejo unidireccional, garantizado por un proxy GET-only.
+- **De solo lectura por defecto** — MeperBoard espeja GitHub unidireccionalmente y solo manda `GET` a menos que un deployment opte por escrituras (`WRITE_MODE=enabled`). Las escrituras quedan en una allowlist estricta de issues: crear, comentar, cerrar/reabrir, labels.
 
 ### GitHub, conectado
-- **Iniciá sesión con GitHub** vía una GitHub App de solo lectura — sin pegar tokens, sin acceso de escritura.
+- **Iniciá sesión con GitHub** vía una GitHub App — sin pegar tokens. Los permisos read-only cubren el sync; las escrituras opt-in requieren el permiso **Issues: Read and write** de la App.
 - **Token por usuario** guardado en una cookie cifrada HTTP-only, jamás expuesto al JavaScript del cliente.
 - **Selector de repositorios en vivo** — navegá y cambiá entre tus repositorios desde una command palette.
 - **Manejo transparente de rate limit** con back-off automático e indicador de rate limit en vivo.
@@ -118,17 +118,17 @@ MeperBoard usa algunas variables de entorno para la autenticación con GitHub. N
 
 1. Creá una [GitHub App](https://github.com/settings/apps/new) para tu dominio.
 2. Configurá la **callback URL** como `https://<tu-dominio>/api/auth/callback`.
-3. Otorgá acceso **Read-only** a **Issues** y **Pull requests** (Metadata es requerida y de solo lectura por defecto).
+3. Otorgá acceso **Read-only** a **Issues** y **Pull requests** (Metadata es requerida y de solo lectura por defecto). Las escrituras son opt-in: otorgá **Issues: Read and write** y seteá `WRITE_MODE=enabled` solo si las querés.
 4. **Habilitá "Expire user authorization tokens"** — MeperBoard depende del refresh de tokens.
 5. Copiá el **Client ID** y generá un **Client secret**.
 
-> MeperBoard es de solo lectura: nunca solicita acceso de escritura. Ver [Seguridad](#seguridad).
+> MeperBoard es de solo lectura por defecto: sin `WRITE_MODE=enabled` nunca manda un request de escritura. Optar por las escrituras es una decisión del deployment — ver [Seguridad](#seguridad).
 
 ---
 
 ## 🔒 Seguridad
 
-- **Garantía de solo lectura.** El proxy de GitHub acepta solo requests `GET` y aplica una allow-list de rutas del repositorio. Una escritura es estructuralmente imposible.
+- **De solo lectura por defecto.** El proxy de GitHub acepta solo requests `GET` y aplica una allow-list de rutas del repositorio. Las escrituras son imposibles salvo que el deployment setee `WRITE_MODE=enabled`, y aun así pasan solo por la allowlist estricta de issues (crear, comentar, cerrar/reabrir, labels) — mismo origen, con el token del propio caller.
 - **Los tokens nunca llegan al navegador.** Los user access tokens se cifran (`jose` JWE, `A256GCM`) en una cookie `httpOnly + Secure + SameSite=Lax`. El JavaScript del cliente jamás puede leerlos.
 - **Estado de sesión cifrado.** El `state` de OAuth se guarda en una cookie cifrada de un solo uso para prevenir CSRF.
 - **Content-Security-Policy estricta** con nonce por request, más renderizado de Markdown sanitizado ([DOMPurify](https://github.com/cure53/DOMPurify)) para cuerpos de issues/PRs.
@@ -140,11 +140,11 @@ Ver la [guía de self-hosting](/docs/SELF_HOST.md) para la alternativa con PAT.
 
 ## 🧠 Cómo funciona
 
-MeperBoard es un **espejo local-first**: trae tus issues y PRs de GitHub a una base de datos IndexedDB en tu dispositivo, y los renderiza desde esa copia local. La sincronización es siempre de solo lectura y siempre a tu manera — traés datos, nunca empujás un cambio de vuelta.
+MeperBoard es un **espejo local-first**: trae tus issues y PRs de GitHub a una base de datos IndexedDB en tu dispositivo, y los renderiza desde esa copia local. La sincronización es siempre de solo lectura y siempre a tu manera. Las escrituras, cuando un deployment las habilita, son acciones explícitas que disparás vos (crear, comentar, cerrar/reabrir, labels) — nunca un efecto colateral de un sync.
 
 ```mermaid
 flowchart LR
-  A[GitHub API] -->|GET /issues /pulls| P[Proxy read-only]
+  A[GitHub API] -->|GET /issues /pulls| P[Proxy read-only por defecto]
   P -->|espejo unidireccional| DB[(IndexedDB / Dexie)]
   DB --> B[Tablero]
   DB --> L[Backlog]
@@ -162,7 +162,7 @@ Vos ponés tu propia identidad (OAuth con GitHub App) y tu propio navegador — 
 - **Dexie / IndexedDB** para el store offline-first (`repos`, `github_items`, `local_items`, `columns`, `epics`, `column_overrides`).
 - **TanStack Query** para server-state y caché optimista.
 - **Conector de sync unidireccional** con capa de estrategias de columna pluggable.
-- **Proxy de GitHub de solo lectura** (`/api/github/[...path]`) — GET-only, con check de origen e inyección de token.
+- **Proxy de GitHub de solo lectura por defecto** (`/api/github/[...path]`) — GET-only salvo `WRITE_MODE=enabled`, con check de origen e inyección de token.
 
 ```
 src/
@@ -187,7 +187,7 @@ npm run test
 - **Unit** — lógica de dominio pura (proxy, conector, rate limiter, estrategias de columna, cripto de sesión).
 - **Integración / Componente** — componentes y hooks renderizados contra un IndexedDB mockeado.
 
-> 381 tests en 48 archivos.
+> 537 tests en 62 archivos.
 
 ---
 
@@ -197,7 +197,7 @@ npm run test
 
 1. **Fork** del repo y creá una rama de feature.
 2. Seguí las convenciones existentes: TypeScript estricto, conventional commits, TDD (escribí el test que falla primero).
-3. Mantené intacta la garantía de solo lectura — nunca agregues un camino de escritura al proxy de GitHub.
+3. Mantené intacto el default de solo lectura — cualquier escritura nueva debe quedar detrás del gate opt-in `WRITE_MODE` y de la allowlist estricta de issues (ver [`odd/tasks/github-write-path.md`](./odd/tasks/github-write-path.md)).
 4. Corré `npm run typecheck` y `npm run test` antes de abrir un PR.
 
 > Este proyecto se construye con un flujo de trabajo TDD estricto. El comportamiento nuevo llega con su test.

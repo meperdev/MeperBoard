@@ -24,6 +24,20 @@ function githubRequest(
   return new Request(url, { headers });
 }
 
+/** Build a JSON write request (POST/PATCH) with the standard test headers. */
+function githubWrite(
+  url: string,
+  method: "POST" | "PATCH",
+  body: unknown,
+  headers: Record<string, string> = { origin: ALLOWED_ORIGIN },
+): Request {
+  return new Request(url, {
+    method,
+    headers: { "content-type": "application/json", ...headers },
+    body: JSON.stringify(body),
+  });
+}
+
 function stubAuthEnv(overrides: Record<string, string | undefined> = {}) {
   vi.stubEnv("NODE_ENV", "test");
   vi.stubEnv("AUTH_SECRET", SECRET);
@@ -94,10 +108,11 @@ describe("github proxy route", () => {
     expect(typeof route.GET).toBe("function");
   });
 
-  it("is GET-only: no POST/PATCH/PUT/DELETE handlers are exported", () => {
+  it("exports the gated write handlers but never PUT/DELETE", () => {
     const handlers = route as unknown as Record<string, unknown>;
-    expect(handlers.POST).toBeUndefined();
-    expect(handlers.PATCH).toBeUndefined();
+    expect(typeof handlers.GET).toBe("function");
+    expect(typeof handlers.POST).toBe("function");
+    expect(typeof handlers.PATCH).toBe("function");
     expect(handlers.PUT).toBeUndefined();
     expect(handlers.DELETE).toBeUndefined();
   });
@@ -363,5 +378,206 @@ describe("github proxy route", () => {
     );
 
     expect(response.headers.get("link")).toBe(link);
+  });
+});
+
+describe("github proxy route — write mode", () => {
+  const issuesUrl = "https://api.github.com/repos/a/b/issues";
+
+  it("keeps read-only by default: POST is 405 with allow GET and no upstream call", async () => {
+    stubAuthEnv();
+    const fetchMock = stubFetch({});
+    const cookie = await sessionCookie();
+
+    const response = await route.POST(
+      githubWrite("http://localhost/api/github/repos/a/b/issues", "POST", { title: "t" }, { origin: ALLOWED_ORIGIN, cookie }),
+      { params: Promise.resolve({ path: ["repos", "a", "b", "issues"] }) },
+    );
+
+    expect(response.status).toBe(405);
+    expect(response.headers.get("allow")).toBe("GET");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("creates an issue when WRITE_MODE=enabled, forwarding method, body and bearer", async () => {
+    stubAuthEnv({ WRITE_MODE: "enabled" });
+    const fetchMock = stubFetch({
+      [issuesUrl]: () => Promise.resolve(new Response(JSON.stringify({ number: 42 }), { status: 201 })),
+    });
+    const cookie = await sessionCookie();
+    const payload = { title: "Nueva", body: "cuerpo" };
+
+    const response = await route.POST(
+      githubWrite("http://localhost/api/github/repos/a/b/issues", "POST", payload, { origin: ALLOWED_ORIGIN, cookie }),
+      { params: Promise.resolve({ path: ["repos", "a", "b", "issues"] }) },
+    );
+
+    expect(response.status).toBe(201);
+    const [, init] = upstreamCall(fetchMock, issuesUrl);
+    expect(init.method).toBe("POST");
+    expect(init.body).toBe(JSON.stringify(payload));
+    expect((init.headers as Record<string, string>).authorization).toBe("Bearer ghu_user");
+  });
+
+  it("comments on an issue through the comments path", async () => {
+    stubAuthEnv({ WRITE_MODE: "enabled" });
+    const commentsUrl = "https://api.github.com/repos/a/b/issues/7/comments";
+    const fetchMock = stubFetch({
+      [commentsUrl]: () => Promise.resolve(new Response(JSON.stringify({ id: 1 }), { status: 201 })),
+    });
+    const cookie = await sessionCookie();
+
+    const response = await route.POST(
+      githubWrite("http://localhost/api/github/repos/a/b/issues/7/comments", "POST", { body: "hola" }, { origin: ALLOWED_ORIGIN, cookie }),
+      { params: Promise.resolve({ path: ["repos", "a", "b", "issues", "7", "comments"] }) },
+    );
+
+    expect(response.status).toBe(201);
+    const [, init] = upstreamCall(fetchMock, commentsUrl);
+    expect(init.method).toBe("POST");
+  });
+
+  it("updates an issue (close/reopen, labels) via PATCH on the single issue", async () => {
+    stubAuthEnv({ WRITE_MODE: "enabled" });
+    const issueUrl = "https://api.github.com/repos/a/b/issues/7";
+    const fetchMock = stubFetch({
+      [issueUrl]: () => Promise.resolve(new Response(JSON.stringify({ state: "closed" }), { status: 200 })),
+    });
+    const cookie = await sessionCookie();
+
+    const response = await route.PATCH(
+      githubWrite("http://localhost/api/github/repos/a/b/issues/7", "PATCH", { state: "closed" }, { origin: ALLOWED_ORIGIN, cookie }),
+      { params: Promise.resolve({ path: ["repos", "a", "b", "issues", "7"] }) },
+    );
+
+    expect(response.status).toBe(200);
+    const [, init] = upstreamCall(fetchMock, issueUrl);
+    expect(init.method).toBe("PATCH");
+    expect(init.body).toBe(JSON.stringify({ state: "closed" }));
+  });
+
+  it("rejects a non-allowlisted write path with 404 and no upstream call", async () => {
+    stubAuthEnv({ WRITE_MODE: "enabled" });
+    const fetchMock = stubFetch({});
+    const cookie = await sessionCookie();
+
+    const response = await route.POST(
+      githubWrite("http://localhost/api/github/repos/a/b/pulls", "POST", {}, { origin: ALLOWED_ORIGIN, cookie }),
+      { params: Promise.resolve({ path: ["repos", "a", "b", "pulls"] }) },
+    );
+
+    expect(response.status).toBe(404);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("enforces the Origin check on writes", async () => {
+    stubAuthEnv({ WRITE_MODE: "enabled" });
+    const fetchMock = stubFetch({});
+    const cookie = await sessionCookie();
+
+    const response = await route.POST(
+      githubWrite("http://localhost/api/github/repos/a/b/issues", "POST", {}, { origin: "https://evil.example.com", cookie }),
+      { params: Promise.resolve({ path: ["repos", "a", "b", "issues"] }) },
+    );
+
+    expect(response.status).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 401 for a write without a session when AUTH_MODE is not pat", async () => {
+    stubAuthEnv({ WRITE_MODE: "enabled", AUTH_MODE: "oauth" });
+    const fetchMock = stubFetch({});
+
+    const response = await route.POST(
+      githubWrite("http://localhost/api/github/repos/a/b/issues", "POST", {}),
+      { params: Promise.resolve({ path: ["repos", "a", "b", "issues"] }) },
+    );
+
+    expect(response.status).toBe(401);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("blocks writes from a login missing from WRITE_ALLOWED_USERS", async () => {
+    stubAuthEnv({ WRITE_MODE: "enabled", WRITE_ALLOWED_USERS: "someoneelse" });
+    const fetchMock = stubFetch({});
+    const cookie = await sessionCookie();
+
+    const response = await route.POST(
+      githubWrite("http://localhost/api/github/repos/a/b/issues", "POST", {}, { origin: ALLOWED_ORIGIN, cookie }),
+      { params: Promise.resolve({ path: ["repos", "a", "b", "issues"] }) },
+    );
+
+    expect(response.status).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("allows writes from a login present in WRITE_ALLOWED_USERS", async () => {
+    stubAuthEnv({ WRITE_MODE: "enabled", WRITE_ALLOWED_USERS: "MeperDonas, other" });
+    const fetchMock = stubFetch({
+      [issuesUrl]: () => Promise.resolve(new Response("{}", { status: 201 })),
+    });
+    const cookie = await sessionCookie();
+
+    const response = await route.POST(
+      githubWrite("http://localhost/api/github/repos/a/b/issues", "POST", { title: "t" }, { origin: ALLOWED_ORIGIN, cookie }),
+      { params: Promise.resolve({ path: ["repos", "a", "b", "issues"] }) },
+    );
+
+    expect(response.status).toBe(201);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows PAT-mode self-host writes with the env token when enabled", async () => {
+    stubAuthEnv({ WRITE_MODE: "enabled", AUTH_MODE: "pat" });
+    const fetchMock = stubFetch({
+      [issuesUrl]: () => Promise.resolve(new Response("{}", { status: 201 })),
+    });
+
+    const response = await route.POST(
+      githubWrite("http://localhost/api/github/repos/a/b/issues", "POST", { title: "t" }),
+      { params: Promise.resolve({ path: ["repos", "a", "b", "issues"] }) },
+    );
+
+    expect(response.status).toBe(201);
+    const [, init] = upstreamCall(fetchMock, issuesUrl);
+    expect((init.headers as Record<string, string>).authorization).toBe("Bearer env-pat-should-never-leak");
+  });
+
+  it("resends the same body when a write is retried after a reactive refresh", async () => {
+    stubAuthEnv({ WRITE_MODE: "enabled", AUTH_MODE: "oauth" });
+    const now = Math.floor(Date.now() / 1000);
+    let upstreamCalls = 0;
+    const fetchMock = stubFetch({
+      [GITHUB_TOKEN_URL]: () =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              access_token: "ghu_retry_w",
+              refresh_token: "ghr_retry_w",
+              expires_in: 28800,
+              token_type: "bearer",
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          ),
+        ),
+      [issuesUrl]: () => {
+        upstreamCalls += 1;
+        return Promise.resolve(new Response("{}", { status: upstreamCalls === 1 ? 401 : 201 }));
+      },
+    });
+    const cookie = await sessionCookie({ exp: now + 8 * 3600, iat: now });
+    const payload = { title: "retry me" };
+
+    const response = await route.POST(
+      githubWrite("http://localhost/api/github/repos/a/b/issues", "POST", payload, { origin: ALLOWED_ORIGIN, cookie }),
+      { params: Promise.resolve({ path: ["repos", "a", "b", "issues"] }) },
+    );
+
+    expect(response.status).toBe(201);
+    const writeCalls = fetchMock.mock.calls.filter(([u]) => u === issuesUrl);
+    expect(writeCalls).toHaveLength(2);
+    expect(writeCalls[0][1].body).toBe(JSON.stringify(payload));
+    expect(writeCalls[1][1].body).toBe(JSON.stringify(payload));
+    await expectSessionCookieTo("ghu_retry_w", response);
   });
 });

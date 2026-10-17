@@ -20,7 +20,7 @@ import {
 } from "../../lib/local-cards-collapsed";
 import { SPRING_RAIL } from "../../lib/motion";
 import { useMinWidth } from "../../lib/use-min-width";
-import { useBacklog, useLocalCards, useMoveCard, useResetCardMove, useSync, type Card } from "../../state";
+import { useBacklog, useAutoSync, useLocalCards, useMoveCard, useResetCardMove, type Card } from "../../state";
 import { TOGGLE_LOCAL_CARDS_EVENT } from "../app-header/command-palette";
 import { AppHeader } from "../app-header/app-header";
 import { Badge } from "../ui/badge";
@@ -31,6 +31,7 @@ import { LocalCards } from "../local-cards";
 
 import { CardPreviewDrawer } from "../preview-drawer/card-preview-drawer";
 import { ProjectDashboard } from "../dashboard";
+import { CreateIssueTrigger } from "../issue-create";
 import { SyncControl } from "./sync-control";
 
 /** Desktop width of the Local Cards rail (matches the round-1 grid column). */
@@ -45,6 +46,9 @@ export function BoardWorkspace() {
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<"all" | "issue" | "pull" | "local" | "critical">("all");
+
+  // S9: refresh the mirror on load when the last sync went stale (>30 min).
+  useAutoSync();
 
   const { data: allCards = [] } = useBacklog();
   const moveCard = useMoveCard();
@@ -83,6 +87,11 @@ export function BoardWorkspace() {
         onToggleLocalCards={toggle}
         localCardsCollapsed={collapsed}
       />
+
+      {/* Board action bar: the explicit GitHub write trigger (writes are opt-in server-side). */}
+      <div className="flex items-center justify-end gap-2 px-2.5 pt-1 sm:px-4">
+        <CreateIssueTrigger />
+      </div>
 
       <div className="flex-1 min-h-0 overflow-hidden">
         <RailLayout

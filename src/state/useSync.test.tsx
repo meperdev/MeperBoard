@@ -2,6 +2,7 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { githubItemRepo, repoRepo } from "../data/repositories";
+import { loadLastSync, saveLastSync } from "../lib/last-sync";
 import { createTestQueryClient, queryWrapper, resetDb } from "./test-utils";
 import { useActiveRepo } from "./use-repos";
 import { useBoard } from "./useBoard";
@@ -54,7 +55,11 @@ function BoardProbe({ fetcher }: { fetcher: (url: string) => Promise<Response> }
 }
 
 describe("useSync", () => {
-  beforeEach(resetDb);
+  beforeEach(async () => {
+    await resetDb();
+    // The success timestamp persists in localStorage — isolate every test.
+    window.localStorage.clear();
+  });
 
   it("triggers a read-only import that updates the store and board", async () => {
     await repoRepo.setActive("meperdonas", "meperboard");
@@ -156,6 +161,43 @@ describe("useSync", () => {
     expect(fetcher).toHaveBeenCalledWith(
       "https://api.github.com/repos/meperdonas/meperboard/issues?state=all&per_page=100",
     );
+  });
+
+  it("records the timestamp of the last successful sync", async () => {
+    await repoRepo.setActive("meperdonas", "meperboard");
+    const fetcher = vi.fn<(url: string) => Promise<Response>>();
+    fetcher.mockResolvedValue(jsonResponse(issuePayloads));
+    const client = createTestQueryClient();
+
+    render(<BoardProbe fetcher={fetcher} />, { wrapper: queryWrapper(client) });
+
+    await waitFor(() => expect(screen.getByTestId("count")).toHaveTextContent("0"));
+    expect(loadLastSync()).toBeNull();
+
+    const before = Date.now();
+    act(() => screen.getByTestId("sync").click());
+    await waitFor(() => expect(screen.getByTestId("count")).toHaveTextContent("2"));
+
+    const recorded = loadLastSync();
+    expect(recorded).not.toBeNull();
+    expect(recorded).toBeGreaterThanOrEqual(before);
+    expect(recorded).toBeLessThanOrEqual(Date.now());
+  });
+
+  it("leaves the stored timestamp untouched when the sync fails", async () => {
+    saveLastSync(1_234);
+    const fetcher = vi.fn<(url: string) => Promise<Response>>();
+    fetcher.mockRejectedValue(new Error("network down"));
+    const client = createTestQueryClient();
+
+    render(<BoardProbe fetcher={fetcher} />, { wrapper: queryWrapper(client) });
+
+    await waitFor(() => expect(screen.getByTestId("count")).toHaveTextContent("0"));
+
+    act(() => screen.getByTestId("sync").click());
+
+    await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent("error"));
+    expect(loadLastSync()).toBe(1_234);
   });
 });
 

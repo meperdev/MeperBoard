@@ -3,13 +3,15 @@
 import { ExternalLink } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
 import { formatState } from "../ui/card-meta";
 import { MarkdownContent } from "../ui/MarkdownContent";
 
 import { cn } from "../../lib/utils";
 import type { GithubItem, RepoId } from "../../data/types";
-import { useIssueDetail } from "../../state";
+import { useIssueDetail, useSetIssueState } from "../../state";
+import { IssueComments } from "./issue-comments";
+import { IssueLabels } from "./issue-labels";
 
 export interface IssueDetailProps {
   /** Mirrored repo id (e.g. "owner/name"); `undefined` means nothing selected. */
@@ -24,11 +26,13 @@ const KIND_LABEL: Record<string, string> = {
 };
 
 /**
- * Read-only detail for a selected GitHub issue or pull request.
+ * Detail for a selected GitHub issue or pull request.
  *
- * Shows title, type, state, labels, body, and linked PRs with placeholders for
- * empty fields. It renders no buttons, inputs, or selects — there is no way to
- * create, edit, close, or re-label from this view (spec issue-detail).
+ * Shows title, type, state, labels, body, linked PRs, and the live comment
+ * thread with the composer that posts a new comment. The close/reopen action
+ * sits next to the state badge, and the labels section carries its inline
+ * editor. Those three are the write surfaces here: editing the issue itself is
+ * still a separate task (spec github-write-path S7).
  */
 export function IssueDetail({ repo, number }: IssueDetailProps) {
   const { data, isPending, isError } = useIssueDetail(repo, number);
@@ -75,6 +79,7 @@ function IssueDetailView({ item }: { item: GithubItem }) {
             {formatState(item.state)}
           </span>
           <span className="font-mono text-xs tabular-nums text-muted-foreground">#{item.number}</span>
+          <IssueStateControl item={item} />
         </div>
         <h2 className="mt-3 text-2xl font-semibold tracking-tight">{item.title}</h2>
         {item.html_url && (
@@ -90,22 +95,7 @@ function IssueDetailView({ item }: { item: GithubItem }) {
         )}
       </header>
 
-      <section className="mt-6">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Labels
-        </h3>
-        {item.labels.length === 0 ? (
-          <p className="mt-2 text-sm text-muted-foreground">No labels.</p>
-        ) : (
-          <ul className="mt-2 flex flex-wrap gap-1.5">
-            {item.labels.map((label) => (
-              <li key={label}>
-                <Badge variant="outline">{label}</Badge>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <IssueLabels item={item} />
 
       <section className="mt-6">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -151,7 +141,44 @@ function IssueDetailView({ item }: { item: GithubItem }) {
           </ul>
         )}
       </section>
+
+      <IssueComments repo={item.repo} number={item.number} />
     </article>
+  );
+}
+
+/**
+ * Close/reopen write control (spec github-write-path S7): flips the issue or
+ * PR between open and closed through the proxy and reflects the new state
+ * immediately, because the hook writes the PATCH response into the mirror.
+ *
+ * The label names the item's kind ("Close issue" / "Close pull request"); the
+ * write has no confirm step because reopening is immediate and reversible.
+ */
+function IssueStateControl({ item }: { item: GithubItem }) {
+  const isOpen = item.state === "open";
+  const target = isOpen ? "closed" : "open";
+  const setState = useSetIssueState(item.repo, item.number, target);
+  const noun = (KIND_LABEL[item.kind] ?? item.kind).toLowerCase();
+  const label = isOpen ? `Close ${noun}` : `Reopen ${noun}`;
+  const pendingLabel = isOpen ? "Closing…" : "Reopening…";
+
+  return (
+    <div className="ml-auto flex flex-col items-start gap-1">
+      <Button
+        type="button"
+        size="sm"
+        disabled={setState.isPending}
+        onClick={() => setState.mutate()}
+      >
+        {setState.isPending ? pendingLabel : label}
+      </Button>
+      {setState.isError && (
+        <p role="alert" className="text-xs font-medium text-destructive">
+          {setState.error.message}
+        </p>
+      )}
+    </div>
   );
 }
 

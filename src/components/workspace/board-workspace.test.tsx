@@ -12,6 +12,7 @@ import {
   loadLocalCardsCollapsed,
   saveLocalCardsCollapsed,
 } from "../../lib/local-cards-collapsed";
+import { saveLastSync } from "../../lib/last-sync";
 import {
   createTestQueryClient,
   makeGithubItem,
@@ -48,6 +49,17 @@ const issuePayloads = [
     labels: [],
   },
 ];
+
+/** The 201 response body GitHub sends for a created issue. */
+const createdIssuePayload = {
+  number: 42,
+  title: "Fix login",
+  body: "",
+  state: "open",
+  html_url: "https://github.com/MeperDonas/MeperPOS/issues/42",
+  updated_at: "2026-10-16T12:00:00Z",
+  labels: [],
+};
 
 function renderWorkspace() {
   const client = createTestQueryClient();
@@ -117,6 +129,112 @@ describe("BoardWorkspace", () => {
       expect(within(columnSection("To Do")).getByText("Buy milk")).toBeInTheDocument();
       expect(within(columnSection("Backlog")).getByText("Fix login")).toBeInTheDocument();
     });
+  });
+
+  it("opens the create-issue dialog from the board", async () => {
+    renderWorkspace();
+
+    await waitFor(() =>
+      expect(screen.getByRole("region", { name: "Kanban board" })).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "New issue" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("dialog", { name: "New issue" })).toBeInTheDocument(),
+    );
+    expect(screen.getByLabelText("Title")).toBeInTheDocument();
+  });
+
+  it("auto-syncs on load when the last successful sync is stale", async () => {
+    window.localStorage.clear();
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : (input as Request).url;
+      if (url === "/api/auth/me") return Promise.resolve(jsonResponse({}, 401));
+      return Promise.resolve(jsonResponse(issuePayloads));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      renderWorkspace();
+
+      // The mirror fills up on its own: no Sync click in this test.
+      await waitFor(() =>
+        expect(within(columnSection("Backlog")).getByText("Expenses slice 1")).toBeInTheDocument(),
+      );
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/github/repos/MeperDonas/MeperPOS/issues?state=all&per_page=100",
+      );
+    } finally {
+      vi.unstubAllGlobals();
+      window.localStorage.clear();
+    }
+  });
+
+  it("does not auto-sync on load when the last successful sync is fresh", async () => {
+    saveLastSync(Date.now());
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : (input as Request).url;
+      if (url === "/api/auth/me") return Promise.resolve(jsonResponse({}, 401));
+      return Promise.resolve(jsonResponse(issuePayloads));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      renderWorkspace();
+
+      await waitFor(() =>
+        expect(screen.getByRole("region", { name: "Kanban board" })).toBeInTheDocument(),
+      );
+
+      expect(fetchMock).not.toHaveBeenCalledWith(
+        "/api/github/repos/MeperDonas/MeperPOS/issues?state=all&per_page=100",
+      );
+    } finally {
+      vi.unstubAllGlobals();
+      window.localStorage.clear();
+    }
+  });
+
+  it("shows the created issue on the board without a manual sync", async () => {
+    // Fresh timestamp: this flow must not depend on the load-time auto-sync.
+    saveLastSync(Date.now());
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : (input as Request).url;
+      if (url === "/api/auth/me") return Promise.resolve(jsonResponse({}, 401));
+      if (init?.method === "POST") {
+        return Promise.resolve(jsonResponse(createdIssuePayload, 201));
+      }
+      return Promise.resolve(jsonResponse(issuePayloads));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      renderWorkspace();
+
+      await waitFor(() =>
+        expect(screen.getByRole("region", { name: "Kanban board" })).toBeInTheDocument(),
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "New issue" }));
+      await waitFor(() =>
+        expect(screen.getByRole("dialog", { name: "New issue" })).toBeInTheDocument(),
+      );
+
+      fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Fix login" } });
+      fireEvent.click(screen.getByRole("button", { name: "Create issue" }));
+
+      await waitFor(() =>
+        expect(screen.queryByRole("dialog", { name: "New issue" })).not.toBeInTheDocument(),
+      );
+      await waitFor(() =>
+        expect(within(columnSection("Backlog")).getByText("Fix login")).toBeInTheDocument(),
+      );
+    } finally {
+      vi.unstubAllGlobals();
+      window.localStorage.clear();
+    }
   });
 });
 
