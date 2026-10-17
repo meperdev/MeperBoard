@@ -40,6 +40,14 @@ export {
   type CreateIssueInput,
   type CreatedIssue,
 } from "./useCreateIssue";
+export {
+  useCreateComment,
+  type CreateCommentInput,
+} from "./useCreateComment";
+export {
+  useIssueComments,
+  type IssueComment,
+} from "./useIssueComments";
 export { useLocalCards, type LocalCardInput, type LocalCardsOptions } from "./useLocalCards";
 export { useMoveCard, useResetCardMove } from "./useMoveCard";
 export {

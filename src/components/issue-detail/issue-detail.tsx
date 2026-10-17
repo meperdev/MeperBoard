@@ -10,6 +10,7 @@ import { MarkdownContent } from "../ui/MarkdownContent";
 import { cn } from "../../lib/utils";
 import type { GithubItem, RepoId } from "../../data/types";
 import { useIssueDetail } from "../../state";
+import { IssueComments } from "./issue-comments";
 
 export interface IssueDetailProps {
   /** Mirrored repo id (e.g. "owner/name"); `undefined` means nothing selected. */
@@ -24,11 +25,12 @@ const KIND_LABEL: Record<string, string> = {
 };
 
 /**
- * Read-only detail for a selected GitHub issue or pull request.
+ * Detail for a selected GitHub issue or pull request.
  *
- * Shows title, type, state, labels, body, and linked PRs with placeholders for
- * empty fields. It renders no buttons, inputs, or selects — there is no way to
- * create, edit, close, or re-label from this view (spec issue-detail).
+ * Shows title, type, state, labels, body, linked PRs, and the live comment
+ * thread with the composer that posts a new comment. Posting a comment is the
+ * only write offered here: there is still no way to edit, close, or re-label
+ * the issue from this view (spec github-write-path S7).
  */
 export function IssueDetail({ repo, number }: IssueDetailProps) {
   const { data, isPending, isError } = useIssueDetail(repo, number);
@@ -151,6 +153,8 @@ function IssueDetailView({ item }: { item: GithubItem }) {
           </ul>
         )}
       </section>
+
+      <IssueComments repo={item.repo} number={item.number} />
     </article>
   );
 }

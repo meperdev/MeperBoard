@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { githubItemRepo } from "../../data/repositories";
 import type { RepoId } from "../../data/types";
@@ -8,11 +8,29 @@ import { IssueDetail, type IssueDetailProps } from "./issue-detail";
 
 const REPO: RepoId = "meperdonas/meperboard";
 
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+/** Answer the comments read with an empty list so the detail renders cleanly. */
+function stubEmptyComments() {
+  const fetchMock = vi.fn(() => Promise.resolve(jsonResponse([])));
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
 function renderDetail(props: IssueDetailProps = {}) {
   const client = createTestQueryClient();
   const utils = render(<IssueDetail {...props} />, { wrapper: queryWrapper(client) });
   return { client, ...utils };
 }
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("IssueDetail", () => {
   beforeEach(async () => {
@@ -61,8 +79,9 @@ describe("IssueDetail", () => {
     expect(screen.getByText("No linked pull requests.")).toBeInTheDocument();
   });
 
-  it("offers no mutation controls", async () => {
+  it("keeps every non-comment mutation out of the detail", async () => {
     await githubItemRepo.upsert(makeGithubItem({ number: 7, title: "Read only" }));
+    stubEmptyComments();
 
     renderDetail({ repo: REPO, number: 7 });
 
@@ -70,15 +89,34 @@ describe("IssueDetail", () => {
       expect(screen.getByRole("heading", { name: "Read only" })).toBeInTheDocument(),
     );
 
-    // No buttons, text inputs, or selects — the detail is strictly read-only.
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
-    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    // The comment composer is the detail's only write control: no edit, close,
+    // or re-label affordances exist yet (those arrive with their own tasks).
+    expect(screen.getByRole("textbox", { name: "New comment" })).toBeInTheDocument();
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
 
-    // No create / edit / close / re-label affordances (exact-match text).
     for (const text of ["Edit", "Create", "Close", "Re-label", "Save"]) {
       expect(screen.queryByText(text)).not.toBeInTheDocument();
     }
+  });
+
+  it("renders the live comments section with its composer", async () => {
+    await githubItemRepo.upsert(makeGithubItem({ number: 7, title: "Fix auth" }));
+    const fetchMock = stubEmptyComments();
+
+    renderDetail({ repo: REPO, number: 7 });
+
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: "Fix auth" })).toBeInTheDocument(),
+    );
+
+    expect(screen.getByRole("region", { name: "Comments" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "New comment" })).toBeInTheDocument();
+
+    // The list reads the issue's comments live through the per-user proxy.
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/github/repos/meperdonas/meperboard/issues/7/comments?per_page=100",
+    );
+    await waitFor(() => expect(screen.getByText("No comments yet.")).toBeInTheDocument());
   });
 
   it("prompts to select an issue when none is selected", () => {
