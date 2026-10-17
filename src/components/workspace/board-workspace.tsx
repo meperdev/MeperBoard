@@ -31,7 +31,6 @@ import { LocalCards } from "../local-cards";
 
 import { CardPreviewDrawer } from "../preview-drawer/card-preview-drawer";
 import { ProjectDashboard } from "../dashboard";
-import { CreateIssueTrigger } from "../issue-create";
 import { SyncControl } from "./sync-control";
 
 /** Desktop width of the Local Cards rail (matches the round-1 grid column). */
@@ -87,11 +86,6 @@ export function BoardWorkspace() {
         onToggleLocalCards={toggle}
         localCardsCollapsed={collapsed}
       />
-
-      {/* Board action bar: the explicit GitHub write trigger (writes are opt-in server-side). */}
-      <div className="flex items-center justify-end gap-2 px-2.5 pt-1 sm:px-4">
-        <CreateIssueTrigger />
-      </div>
 
       <div className="flex-1 min-h-0 overflow-hidden">
         <RailLayout
