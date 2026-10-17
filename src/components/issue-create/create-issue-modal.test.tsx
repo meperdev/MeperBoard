@@ -238,4 +238,49 @@ describe("create issue dialog", () => {
       vi.unstubAllGlobals();
     }
   });
+
+  it("renders a live markdown preview of the description", async () => {
+    const { client } = renderTrigger();
+    await openDialog(client);
+
+    fireEvent.change(screen.getByLabelText(/description/i), {
+      target: { value: "**Important** context with `code`" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+
+    expect(screen.getByText("Important")).toBeInTheDocument();
+    expect(screen.getByText("code")).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/context/i)).not.toBeInTheDocument();
+  });
+
+  it("shows an empty preview note when the description is blank", async () => {
+    const { client } = renderTrigger();
+    await openDialog(client);
+
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+
+    expect(screen.getByText(/nothing to preview/i)).toBeInTheDocument();
+  });
+
+  it("creates the issue with Cmd/Ctrl+Enter", async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse(createdIssue, 201)));
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const { client } = renderTrigger();
+      await openDialog(client);
+
+      fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Shortcut issue" } });
+      fireEvent.keyDown(screen.getByLabelText("Title"), { key: "Enter", metaKey: true });
+
+      await waitFor(() =>
+        expect(fetchMock).toHaveBeenCalledWith(
+          "/api/github/repos/meperdonas/meperboard/issues",
+          expect.objectContaining({ method: "POST" }),
+        ),
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
