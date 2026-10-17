@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutGrid } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -35,14 +35,18 @@ export function AppHeader() {
       <nav className="flex h-14 items-center gap-1.5 px-3 sm:gap-2 sm:px-4 md:px-6" aria-label="Primary">
         <Link
           href="/"
+          aria-label="MeperBoard"
           className="mr-1 sm:mr-4 flex items-center gap-2 rounded-md text-sm font-semibold tracking-tight transition-opacity hover:opacity-90"
         >
-          <span
-            className="flex h-6 w-6 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm shadow-primary/30 ring-1 ring-primary/40 shrink-0"
-            aria-hidden="true"
-          >
-            <LayoutGrid className="h-3.5 w-3.5" />
-          </span>
+          {/* Brand mark (MeperBoard "Mochi" icon). Decorative: the home link is
+              already named by its aria-label and visible wordmark text. */}
+          <Image
+            src="/brand/icon-192.png"
+            alt=""
+            width={192}
+            height={192}
+            className="h-6 w-6 shrink-0 rounded-lg object-contain"
+          />
           <span className="hidden xs:inline sm:inline bg-gradient-to-r from-foreground via-foreground to-foreground/80 bg-clip-text">
             MeperBoard
           </span>

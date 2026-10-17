@@ -183,6 +183,16 @@ describe("AppHeader", () => {
     expect(await screen.findByRole("button", { name: /connect github/i })).toBeInTheDocument();
   });
 
+  it("brands the home link with the MeperBoard mark instead of a generic glyph", async () => {
+    mockFetch({ "/api/auth/me": () => jsonResponse({}, 401) });
+
+    render(<AppHeader />, { wrapper: queryWrapper(client) });
+
+    const homeLink = screen.getAllByRole("link", { name: "MeperBoard" })[0];
+    expect(homeLink).toHaveAttribute("href", "/");
+    expect(homeLink.querySelector('img[src*="brand/icon-192"], img[src*="icon-192"]')).not.toBeNull();
+  });
+
   it("opens the repo switcher from the header repo button", async () => {
     await resetDb();
     await repoRepo.setActive("acme", "widgets");

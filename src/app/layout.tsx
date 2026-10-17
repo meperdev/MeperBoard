@@ -18,6 +18,7 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "MeperBoard",
   description: "Local-first kanban board for the Meper suite's GitHub issues",
+  manifest: "/site.webmanifest",
 };
 
 /**
