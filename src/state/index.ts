@@ -44,6 +44,7 @@ export {
   useCreateComment,
   type CreateCommentInput,
 } from "./useCreateComment";
+export { useSetIssueState, type IssueState } from "./useSetIssueState";
 export {
   useIssueComments,
   type IssueComment,
