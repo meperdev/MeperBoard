@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowUp, Search } from "lucide-react";
 import type { BacklogGroupKey } from "../../domain/grouping";
 import type { CardType, SortDirection, SortField } from "../../state";
+import { CreateIssueTrigger } from "../issue-create";
 import { Input } from "../ui/input";
 import { Select } from "../ui/select";
 import { SyncControl } from "../workspace/sync-control";
@@ -161,7 +162,8 @@ export function BacklogToolbar({
         </div>
       </div>
 
-      <div className="flex items-center pb-0.5 sm:ml-auto">
+      <div className="flex items-center gap-2 pb-0.5 sm:ml-auto">
+        <CreateIssueTrigger />
         <SyncControl />
       </div>
     </div>

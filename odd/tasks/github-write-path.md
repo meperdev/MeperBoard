@@ -21,7 +21,7 @@
 ## Tasks
 
 - [x] **T1 — Proxy write core**: gate `WRITE_MODE` + `WRITE_ALLOWED_USERS` + allowlist de escritura + forwarding de body + retry con body + tests (inline, TDD). Commit: este commit del branch (re-creado tras un restore del workspace; RED 28 → GREEN 73 focales; suite 452/452). Review nativo: APPROVED + acknowledged (L7).
-- [ ] **T2 — UI crear issue** (modal en board + backlog).
+- [x] **T2 — UI crear issue** (modal en board + backlog): 17 tests nuevos; suite total 469/469; typecheck limpio. La parte de "re-lectura tras escribir" (S7) queda para T6: la invalidación re-lee el espejo Dexie hasta que el sync importe el issue nuevo.
 - [ ] **T3 — UI comentar** desde issue detail/drawer.
 - [ ] **T4 — UI cerrar/reabrir**.
 - [ ] **T5 — UI labels** (usa S8).
@@ -43,3 +43,4 @@
   3. `R4-2` (WARNING, resilience) — el retry por 401 re-ejecuta escrituras no idempotentes (route.ts:184); sugerencia: idempotency key o replay solo para GET.
   4. `R1-proxy-write-no-path-recheck` (SUGGESTION, risk) — defense in depth: repetir la allowlist dentro de `proxyGithubRequest` (proxy.ts:194-201).
   5. `R4-3` (SUGGESTION, resilience) — gate de escritura silencioso: `WRITE_MODE` mal escrito falla sin log (proxy.ts:43); sugerencia: log del modo resuelto o error distinto.
+- **L9** — T2 (UI crear issue) delegado a un writer bounded (razón: contexto de sesión): `src/components/issue-create/` (modal Portal + trigger), `useCreateIssue` (POST a `/api/github/repos/{o}/{r}/issues`, fallback de repo activo, mapeo 405→read-only / 401→sign-in / 403→mensaje upstream, invalida board/backlog/issueDetail), triggers en board (action row) y backlog toolbar; 17 tests nuevos (hook 8, modal 7, triggers 2), RED→GREEN observado, suite 469/469, typecheck limpio. Diff y superficies verificados por el padre; spot check (suite re-corrida) OK. Hallazgos: (a) el "refetch tras escribir" real depende del sync → T6; (b) copy de `connect-modal.tsx` ("cannot write or modify your code") quedó desactualizado → T7; (c) `useActiveRepo()` asienta en estado error sin repo activo (el fallback de lectura funciona igual) — guardado en Engram; (d) scratch del writer (`/tmp/dbg.test.tsx`) removido por el padre.

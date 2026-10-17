@@ -118,6 +118,21 @@ describe("BoardWorkspace", () => {
       expect(within(columnSection("Backlog")).getByText("Fix login")).toBeInTheDocument();
     });
   });
+
+  it("opens the create-issue dialog from the board", async () => {
+    renderWorkspace();
+
+    await waitFor(() =>
+      expect(screen.getByRole("region", { name: "Kanban board" })).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "New issue" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("dialog", { name: "New issue" })).toBeInTheDocument(),
+    );
+    expect(screen.getByLabelText("Title")).toBeInTheDocument();
+  });
 });
 
 describe("Local cards rail", () => {

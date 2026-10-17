@@ -35,6 +35,11 @@ export {
   type RepoRef,
 } from "./use-repos";
 export { DEFAULT_REPO, proxyFetcher, useSync, type SyncOptions } from "./useSync";
+export {
+  useCreateIssue,
+  type CreateIssueInput,
+  type CreatedIssue,
+} from "./useCreateIssue";
 export { useLocalCards, type LocalCardInput, type LocalCardsOptions } from "./useLocalCards";
 export { useMoveCard, useResetCardMove } from "./useMoveCard";
 export {
