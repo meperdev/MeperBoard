@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { createTestQueryClient, queryWrapper } from "../../state/test-utils";
@@ -87,5 +87,16 @@ describe("ProjectDashboard", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "New card or issue" }));
     expect(onOpenCreate).toHaveBeenCalled();
+  });
+
+  it("opens the in-app issue dialog from the creation menu", async () => {
+    renderDashboard({ cards });
+
+    fireEvent.click(screen.getByRole("button", { name: "More creation options" }));
+    fireEvent.click(screen.getByRole("button", { name: /GitHub Issue/ }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("dialog", { name: "New issue" })).toBeInTheDocument(),
+    );
   });
 });

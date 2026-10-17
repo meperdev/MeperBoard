@@ -138,7 +138,8 @@ describe("BoardWorkspace", () => {
       expect(screen.getByRole("region", { name: "Kanban board" })).toBeInTheDocument(),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "New issue" }));
+    fireEvent.click(screen.getByRole("button", { name: "More creation options" }));
+    fireEvent.click(screen.getByRole("button", { name: /GitHub Issue/ }));
 
     await waitFor(() =>
       expect(screen.getByRole("dialog", { name: "New issue" })).toBeInTheDocument(),
@@ -217,7 +218,8 @@ describe("BoardWorkspace", () => {
         expect(screen.getByRole("region", { name: "Kanban board" })).toBeInTheDocument(),
       );
 
-      fireEvent.click(screen.getByRole("button", { name: "New issue" }));
+      fireEvent.click(screen.getByRole("button", { name: "More creation options" }));
+      fireEvent.click(screen.getByRole("button", { name: /GitHub Issue/ }));
       await waitFor(() =>
         expect(screen.getByRole("dialog", { name: "New issue" })).toBeInTheDocument(),
       );

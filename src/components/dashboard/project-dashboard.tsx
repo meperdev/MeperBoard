@@ -9,7 +9,6 @@ import {
   ChevronDown,
   CircleDot,
   Clock,
-  ExternalLink,
   GitPullRequest,
   LayoutGrid,
   Plus,
@@ -24,10 +23,11 @@ import { useMemo, useState } from "react";
 import { computeProjectMetrics, isCriticalCard, type ProjectMetrics } from "../../domain/metrics";
 import { cn } from "../../lib/utils";
 import { countByType } from "../../lib/card-filters";
-import { useActiveRepos } from "../../state/use-repos";
 import type { Card } from "../../state/cards";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
+import { GithubMark } from "../app-header/github-mark";
+import { CreateIssueModal } from "../issue-create";
 import { OPEN_CREATE_LOCAL_CARD_EVENT } from "../local-cards";
 import { SyncControl } from "../workspace/sync-control";
 
@@ -60,9 +60,9 @@ export function ProjectDashboard({
   className,
 }: ProjectDashboardProps) {
   const pathname = usePathname();
-  const activeRepos = useActiveRepos();
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [showCreateMenu, setShowCreateMenu] = useState(false);
+  const [showIssueModal, setShowIssueModal] = useState(false);
 
   const metrics: ProjectMetrics = computeProjectMetrics(cards);
   const counts = useMemo(() => countByType(cards), [cards]);
@@ -86,14 +86,10 @@ export function ProjectDashboard({
     }
   }
 
+  /** Opens the in-app create-issue dialog (writes are opt-in server-side). */
   function handleOpenGitHubIssue() {
     setShowCreateMenu(false);
-    const repoId = activeRepos.data?.[0]?.id;
-    if (repoId) {
-      window.open(`https://github.com/${repoId}/issues/new`, "_blank", "noopener,noreferrer");
-    } else {
-      handleCreateLocal();
-    }
+    setShowIssueModal(true);
   }
 
   return (
@@ -217,7 +213,7 @@ export function ProjectDashboard({
         </div>
 
         {/* Right: Stat pills + Filters + View switch + New Card */}
-        <div className="flex items-center justify-between sm:justify-end gap-2 overflow-x-auto no-scrollbar py-0.5">
+        <div className="flex items-center justify-between sm:justify-end gap-2 overflow-x-auto no-scrollbar sm:overflow-visible py-0.5">
           {/* Stat Pills (Squared with icons, no bullet dots) */}
           <div className="flex items-center gap-1.5 shrink-0" data-testid="total-count">
             <span className="inline-flex items-center gap-1 rounded-[4px] border border-primary/30 bg-primary/10 px-2 py-0.5 font-mono text-[11px] font-semibold text-primary shadow-2xs">
@@ -371,6 +367,9 @@ export function ProjectDashboard({
                 type="button"
                 onClick={() => setShowCreateMenu((prev) => !prev)}
                 aria-label="More creation options"
+                aria-haspopup="menu"
+                aria-expanded={showCreateMenu}
+                title="More creation options"
                 className="inline-flex h-8 items-center justify-center rounded-r-xl border-l border-primary-foreground/20 bg-primary px-1.5 text-primary-foreground hover:bg-primary-hover focus-visible:outline-none"
               >
                 <ChevronDown className="h-3.5 w-3.5" />
@@ -403,10 +402,10 @@ export function ProjectDashboard({
                     onClick={handleOpenGitHubIssue}
                     className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-foreground transition-colors hover:bg-accent"
                   >
-                    <ExternalLink className="h-3.5 w-3.5 text-primary shrink-0" />
+                    <GithubMark className="h-3.5 w-3.5 text-primary shrink-0" />
                     <div className="text-left">
                       <p className="font-semibold text-foreground">GitHub Issue</p>
-                      <p className="text-[10px] text-muted-foreground">Opens on github.com ↗</p>
+                      <p className="text-[10px] text-muted-foreground">Creates on GitHub</p>
                     </div>
                   </button>
                 </div>
@@ -416,6 +415,8 @@ export function ProjectDashboard({
           </div>
         </div>
       </div>
+
+      {showIssueModal && <CreateIssueModal onClose={() => setShowIssueModal(false)} />}
     </header>
   );
 }
