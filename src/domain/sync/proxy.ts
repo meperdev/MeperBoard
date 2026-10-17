@@ -7,9 +7,10 @@
  * allow-list, token resolution, and rate-limit forwarding directly
  * unit-testable without spinning up `next`.
  *
- * READ-ONLY GUARANTEE: the proxy forwards only GET. The method allow-list plus
- * the route handler exporting no POST/PATCH/PUT/DELETE handlers ensure the
- * client can never trigger a GitHub write.
+ * READ-ONLY BY DEFAULT: GET is the only method forwarded unless
+ * `WRITE_MODE=enabled` opts into writes, and even then only the strict issue
+ * write allowlist (POST create/comment, PATCH issue) is reachable.
+ * PUT/DELETE never pass, and pull requests stay read-only.
  *
  * EDGE-SAFE: no Node-only builtins are imported here. The token comes straight
  * from the server env (`GITHUB_TOKEN`) — the `gh auth token` subprocess path was
@@ -29,9 +30,60 @@ export function buildGithubApiUrl(path: string[], query?: string): string {
   return query ? `${base}?${query}` : base;
 }
 
-/** The proxy only ever forwards GET requests. */
+/** Methods the proxy can forward at all (write mode gates POST/PATCH). */
 export function isAllowedMethod(method: string): boolean {
-  return method === "GET";
+  const upper = method.toUpperCase();
+  return upper === "GET" || upper === "POST" || upper === "PATCH";
+}
+
+/** Write mode is opt-in: only the literal `WRITE_MODE=enabled` opens writes. */
+export function isWriteModeEnabled(env: Record<string, string | undefined>): boolean {
+  return env.WRITE_MODE === "enabled";
+}
+
+/**
+ * Optional per-user write gate (`WRITE_ALLOWED_USERS=login1,login2`).
+ * An absent/empty list allows any authenticated user; a non-empty list
+ * restricts writes to those logins, case-insensitive. Without a session login
+ * (PAT self-host) the list cannot apply and the operator's token writes.
+ */
+export function isUserAllowedToWrite(
+  login: string | undefined,
+  allowedUsers: string | undefined,
+): boolean {
+  const list = (allowedUsers ?? "")
+    .split(",")
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
+  if (list.length === 0) return true;
+  if (!login) return true;
+  return list.includes(login.toLowerCase());
+}
+
+/**
+ * Write allowlist (only reachable with `WRITE_MODE=enabled`). Issues are the
+ * only writable resource, only via the explicit `repos/{owner}/{repo}` form:
+ * - `POST repos/{o}/{r}/issues`              → create an issue
+ * - `POST repos/{o}/{r}/issues/{n}/comments` → comment on an issue
+ * - `PATCH repos/{o}/{r}/issues/{n}`         → close/reopen, labels, edit
+ * Everything else — pull requests, the `repositories/{id}` form used by
+ * pagination, PUT/DELETE — is rejected.
+ */
+export function isAllowedWritePath(path: string[], method: string): boolean {
+  if (path[0] !== "repos" || path[3] !== "issues") return false;
+  const upper = method.toUpperCase();
+  if (upper === "POST") {
+    if (path.length === 4) return true;
+    return path.length === 6 && isNumericSegment(path[4]) && path[5] === "comments";
+  }
+  if (upper === "PATCH") {
+    return path.length === 5 && isNumericSegment(path[4]);
+  }
+  return false;
+}
+
+function isNumericSegment(segment: string | undefined): boolean {
+  return typeof segment === "string" && /^\d+$/.test(segment);
 }
 
 /**
@@ -114,7 +166,11 @@ export interface ProxyDeps {
   query?: string;
   method: string;
   token: string | null;
+  /** Raw JSON body forwarded verbatim for write requests (POST/PATCH). */
+  body?: string;
   fetcher: (url: string, init: RequestInit) => Promise<Response>;
+  /** Opens POST/PATCH forwarding; `WRITE_MODE=enabled` on the route sets it. */
+  allowWrites?: boolean;
 }
 
 /** Headers forwarded from the upstream response to the client. */
@@ -135,8 +191,11 @@ const FORWARD_HEADERS = [
  * - A 403/429 upstream response is surfaced as 429 "sync paused".
  */
 export async function proxyGithubRequest(deps: ProxyDeps): Promise<ProxyResult> {
-  if (!isAllowedMethod(deps.method)) {
-    return { status: 405, body: { error: "Method not allowed" }, headers: { allow: "GET" } };
+  const method = deps.method.toUpperCase();
+  const allowHeader = deps.allowWrites ? "GET, POST, PATCH" : "GET";
+  const write = method !== "GET";
+  if (!isAllowedMethod(method) || (write && !deps.allowWrites)) {
+    return { status: 405, body: { error: "Method not allowed" }, headers: { allow: allowHeader } };
   }
 
   const url = buildGithubApiUrl(deps.path, deps.query);
@@ -146,11 +205,18 @@ export async function proxyGithubRequest(deps: ProxyDeps): Promise<ProxyResult> 
     "user-agent": "MeperBoard",
   };
   if (deps.token) headers.authorization = `Bearer ${deps.token}`;
+  if (write) headers["content-type"] = "application/json";
 
-  const upstream = await deps.fetcher(url, { method: "GET", headers });
+  const upstream = await deps.fetcher(url, {
+    method,
+    headers,
+    body: write ? deps.body : undefined,
+  });
   const forwarded = collectHeaders(upstream.headers);
 
-  if (upstream.status === 403 || upstream.status === 429) {
+  // Rate limiting: 429 always surfaces as sync-paused. A 403 only means rate
+  // limiting on reads; on writes it is a permission answer and passes through.
+  if (upstream.status === 429 || (upstream.status === 403 && !write)) {
     return {
       status: 429,
       body: { error: "sync paused", rate_limited: true },

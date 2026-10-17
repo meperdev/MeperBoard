@@ -1,4 +1,11 @@
-import { isAllowedOrigin, isAllowedPath, proxyGithubRequest } from "../../../../domain/sync/proxy";
+import {
+  isAllowedOrigin,
+  isAllowedPath,
+  isAllowedWritePath,
+  isUserAllowedToWrite,
+  isWriteModeEnabled,
+  proxyGithubRequest,
+} from "../../../../domain/sync/proxy";
 import {
   SESSION_MAX_AGE,
   buildSessionCookie,
@@ -12,11 +19,14 @@ import {
 import { buildSessionPayload, refreshAccessToken } from "@/lib/auth/oauth";
 
 /**
- * Read-only GitHub proxy — GET only, per-user.
+ * GitHub proxy — per-user, read-only by default.
  *
- * This route forwards GET requests to `https://api.github.com/{...path}` with
- * the AUTHENTICATED user's token. Only `GET` is exported, so Next.js returns 405
- * for POST/PATCH/PUT/DELETE — the client can never trigger a GitHub write.
+ * GET forwards to `https://api.github.com/{...path}` with the AUTHENTICATED
+ * user's token. POST/PATCH exist only behind `WRITE_MODE=enabled` and the
+ * strict issue write allowlist (`repos/{o}/{r}/issues…`): create issue,
+ * comment, close/reopen/labels. PUT/DELETE are never exported, and with the
+ * flag off the relay is exactly as before: GET-only, 405 for anything else.
+ * `WRITE_ALLOWED_USERS` can further restrict writes to specific logins.
  *
  * The relay is hardened (Slice 1): the request Origin/Referer must be one of
  * the app's own origins (403 otherwise), and the path must be on the sync
@@ -37,8 +47,8 @@ import { buildSessionPayload, refreshAccessToken } from "@/lib/auth/oauth";
  * - On a failed refresh (revoked/expired `ghr_`) or a session older than the
  *   30-day absolute cap, the cookie is cleared and 401 forces a re-login.
  *
- * The refresh itself is a server-to-server POST to github.com, so the GET-only
- * proxy contract is preserved (no refresh handler is exported).
+ * The refresh itself is a server-to-server POST to github.com and never rides
+ * on the exported handlers.
  */
 export const runtime = "nodejs";
 
@@ -46,7 +56,30 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ path: string[] }> },
 ): Promise<Response> {
+  return handle(request, context);
+}
+
+export async function POST(
+  request: Request,
+  context: { params: Promise<{ path: string[] }> },
+): Promise<Response> {
+  return handle(request, context);
+}
+
+export async function PATCH(
+  request: Request,
+  context: { params: Promise<{ path: string[] }> },
+): Promise<Response> {
+  return handle(request, context);
+}
+
+/** Shared handler: origin/allowlist gates, auth and the one-way relay. */
+async function handle(
+  request: Request,
+  context: { params: Promise<{ path: string[] }> },
+): Promise<Response> {
   const { path } = await context.params;
+  const method = request.method.toUpperCase();
   const query = new URL(request.url).search.slice(1);
   const cookieHeader = request.headers.get("cookie") ?? "";
 
@@ -55,13 +88,28 @@ export async function GET(
   if (!isAllowedOrigin(origin, referer, getAllowedOrigin())) {
     return jsonResponse(403, { error: "Forbidden" });
   }
-  if (!isAllowedPath(path)) {
+
+  const writesEnabled = isWriteModeEnabled(process.env);
+  if (method === "GET") {
+    if (!isAllowedPath(path)) {
+      return jsonResponse(404, { error: "Not Found" });
+    }
+  } else if (!writesEnabled) {
+    // Read-only default: without WRITE_MODE=enabled the proxy stays GET-only.
+    return jsonResponse(405, { error: "Method not allowed" }, undefined, { allow: "GET" });
+  } else if (!isAllowedWritePath(path, method)) {
     return jsonResponse(404, { error: "Not Found" });
   }
 
   const secret = getAuthSecret();
   const now = Math.floor(Date.now() / 1000);
   const session = await readSessionJwe(cookieHeader, secret);
+
+  // Optional per-login gate for writes. Without a session (PAT self-host)
+  // the list cannot apply and the operator's own token is used.
+  if (method !== "GET" && session && !isUserAllowedToWrite(session.login, process.env.WRITE_ALLOWED_USERS)) {
+    return jsonResponse(403, { error: "Forbidden" });
+  }
 
   let token: string | null = null;
   let rotatedCookie: string | null = null;
@@ -101,8 +149,19 @@ export async function GET(
     return jsonResponse(401, { error: "Unauthorized" });
   }
 
+  // Read the body once: writes forward it verbatim and a 401 retry re-sends it.
+  const body = method === "GET" ? undefined : await request.text();
+
   const fetcher = (url: string, init: RequestInit) => fetch(url, init);
-  let result = await proxyGithubRequest({ path, query: query || undefined, method: request.method, token, fetcher });
+  let result = await proxyGithubRequest({
+    path,
+    query: query || undefined,
+    method,
+    token,
+    body,
+    fetcher,
+    allowWrites: writesEnabled,
+  });
 
   // Reactive refresh: a still-valid-at-read token that GitHub rejects gets ONE
   // refresh + retry. Only when we did not already rotate proactively this request.
@@ -117,7 +176,15 @@ export async function GET(
     }
     token = rotated.access_token;
     rotatedCookie = await rotateSessionCookie(session, rotated, secret, now);
-    result = await proxyGithubRequest({ path, query: query || undefined, method: request.method, token, fetcher });
+    result = await proxyGithubRequest({
+      path,
+      query: query || undefined,
+      method,
+      token,
+      body,
+      fetcher,
+      allowWrites: writesEnabled,
+    });
   }
 
   const headers = new Headers({ "content-type": "application/json" });
@@ -129,8 +196,13 @@ export async function GET(
   return new Response(JSON.stringify(result.body), { status: result.status, headers });
 }
 
-function jsonResponse(status: number, body: unknown, setCookie?: string): Response {
-  const headers: Record<string, string> = { "content-type": "application/json" };
+function jsonResponse(
+  status: number,
+  body: unknown,
+  setCookie?: string,
+  extraHeaders?: Record<string, string>,
+): Response {
+  const headers: Record<string, string> = { "content-type": "application/json", ...extraHeaders };
   if (setCookie) headers["set-cookie"] = setCookie;
   return new Response(JSON.stringify(body), { status, headers });
 }
