@@ -9,7 +9,7 @@ const GITHUB_API_ORIGIN = "https://api.github.com";
 
 /** Shown when the deployment runs without `WRITE_MODE=enabled` (proxy 405). */
 export const WRITES_DISABLED_MESSAGE =
-  "This deployment is read-only, so creating issues is disabled.";
+  "This deployment is read-only, so writes are disabled.";
 
 /** Shown when the proxy has no authenticated session (401). */
 export const SIGN_IN_REQUIRED_MESSAGE =

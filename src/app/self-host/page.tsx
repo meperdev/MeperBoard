@@ -12,7 +12,7 @@ const STEPS = [
   },
   {
     title: "Provide a GitHub token",
-    body: "Set GITHUB_TOKEN to a personal access token with read access to the repositories you want to load. Classic tokens work; fine-grained tokens with read-only Issues and Contents permissions are recommended.",
+    body: "Set GITHUB_TOKEN to a personal access token with read access to the repositories you want to load. Classic tokens work; fine-grained tokens with read-only Issues and Contents permissions are recommended. Add write access to Issues and set WRITE_MODE=enabled if you want the opt-in write actions.",
   },
   {
     title: "Set the allowed origin",
