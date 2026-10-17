@@ -31,13 +31,22 @@ function rawIssue(state: "open" | "closed", overrides: Record<string, unknown> =
 
 /**
  * Stub the per-user proxy for the detail's requests: a PATCH answers with the
- * updated raw issue (or the given handler), every other request — the comments
- * read — answers with an empty list.
+ * updated raw issue (or the given handler), the repo label catalog read answers
+ * with a small catalog, and every other request — the comments read — answers
+ * with an empty list.
  */
 function stubProxyFetch(handlePatch?: () => Promise<Response>) {
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     if (init?.method === "PATCH") {
       return handlePatch ? handlePatch() : Promise.resolve(jsonResponse(rawIssue("closed")));
+    }
+    if (String(input).includes("/labels?")) {
+      return Promise.resolve(
+        jsonResponse([
+          { id: 1, name: "bug", color: "d73a4a" },
+          { id: 2, name: "feature", color: "0e8a16" },
+        ]),
+      );
     }
     return Promise.resolve(jsonResponse([]));
   });
@@ -102,7 +111,7 @@ describe("IssueDetail", () => {
     expect(screen.getByText("No linked pull requests.")).toBeInTheDocument();
   });
 
-  it("offers only the comment composer and the close/reopen control as writes", async () => {
+  it("offers only the comment composer, close/reopen, and labels editor as writes", async () => {
     await githubItemRepo.upsert(makeGithubItem({ number: 7, title: "Read only" }));
     stubProxyFetch();
 
@@ -112,11 +121,13 @@ describe("IssueDetail", () => {
       expect(screen.getByRole("heading", { name: "Read only" })).toBeInTheDocument(),
     );
 
-    // The detail's write surfaces are the comment composer plus the close action
-    // (spec github-write-path S7); editing, creating, and re-labeling still have
-    // no affordance here.
+    // The detail's write surfaces are the comment composer, the close/reopen
+    // control, and the labels editor (spec github-write-path S7); creating and
+    // editing an issue still have no affordance here. "Save" lives inside the
+    // labels editor, which only renders after "Edit labels" is activated.
     expect(screen.getByRole("textbox", { name: "New comment" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Close issue" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit labels" })).toBeInTheDocument();
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
 
     for (const text of ["Edit", "Create", "Re-label", "Save"]) {
@@ -221,6 +232,49 @@ describe("IssueDetail", () => {
     );
     expect(screen.getByText("Open")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Close issue" })).toBeEnabled();
+  });
+
+  it("applies the edited labels to the detail after a successful save", async () => {
+    await githubItemRepo.upsert(
+      makeGithubItem({ number: 7, title: "Fix auth", labels: ["bug", "security"] }),
+    );
+    const fetchMock = stubProxyFetch(() =>
+      Promise.resolve(jsonResponse(rawIssue("open", { labels: [{ name: "bug" }] }))),
+    );
+
+    renderDetail({ repo: REPO, number: 7 });
+
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: "Fix auth" })).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit labels" }));
+
+    // The editor lists the repo catalog plus the item's current labels
+    // ("security" is on the item but not in the catalog); toggling it off and
+    // saving sends the full replacement list.
+    fireEvent.click(await screen.findByRole("button", { name: "security" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/github/repos/meperdonas/meperboard/issues/7",
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ labels: ["bug"] }),
+        },
+      ),
+    );
+
+    // The write-through refreshes the detail from the mirror: the badge row is
+    // back and drops the label that the PATCH response no longer lists.
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Edit labels" })).toBeInTheDocument(),
+    );
+    await waitFor(() => expect(screen.queryByText("security")).not.toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
+    expect(screen.getByText("bug")).toBeInTheDocument();
   });
 
   it("renders the live comments section with its composer", async () => {

@@ -46,6 +46,12 @@ export {
 } from "./useCreateComment";
 export { useSetIssueState, type IssueState } from "./useSetIssueState";
 export {
+  SET_ISSUE_LABELS_FAILED_MESSAGE,
+  useRepoLabels,
+  useSetIssueLabels,
+  type RepoLabel,
+} from "./useSetIssueLabels";
+export {
   useIssueComments,
   type IssueComment,
 } from "./useIssueComments";

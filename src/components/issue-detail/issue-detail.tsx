@@ -3,7 +3,6 @@
 import { ExternalLink } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { formatState } from "../ui/card-meta";
 import { MarkdownContent } from "../ui/MarkdownContent";
@@ -12,6 +11,7 @@ import { cn } from "../../lib/utils";
 import type { GithubItem, RepoId } from "../../data/types";
 import { useIssueDetail, useSetIssueState } from "../../state";
 import { IssueComments } from "./issue-comments";
+import { IssueLabels } from "./issue-labels";
 
 export interface IssueDetailProps {
   /** Mirrored repo id (e.g. "owner/name"); `undefined` means nothing selected. */
@@ -30,9 +30,9 @@ const KIND_LABEL: Record<string, string> = {
  *
  * Shows title, type, state, labels, body, linked PRs, and the live comment
  * thread with the composer that posts a new comment. The close/reopen action
- * sits next to the state badge. Those two are the only write surfaces here:
- * editing and re-labeling the issue are still separate tasks (spec
- * github-write-path S7).
+ * sits next to the state badge, and the labels section carries its inline
+ * editor. Those three are the write surfaces here: editing the issue itself is
+ * still a separate task (spec github-write-path S7).
  */
 export function IssueDetail({ repo, number }: IssueDetailProps) {
   const { data, isPending, isError } = useIssueDetail(repo, number);
@@ -95,22 +95,7 @@ function IssueDetailView({ item }: { item: GithubItem }) {
         )}
       </header>
 
-      <section className="mt-6">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Labels
-        </h3>
-        {item.labels.length === 0 ? (
-          <p className="mt-2 text-sm text-muted-foreground">No labels.</p>
-        ) : (
-          <ul className="mt-2 flex flex-wrap gap-1.5">
-            {item.labels.map((label) => (
-              <li key={label}>
-                <Badge variant="outline">{label}</Badge>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <IssueLabels item={item} />
 
       <section className="mt-6">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">

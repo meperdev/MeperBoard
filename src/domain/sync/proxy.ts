@@ -122,7 +122,8 @@ export function isAllowedOrigin(
 /**
  * Path allowlist. The relay is a thin read-only GitHub proxy that only exposes
  * the sync paths the app needs: `repos/{owner}/{repo}/issues` and
- * `repos/{owner}/{repo}/pulls` (plus their single-item variants), and the two
+ * `repos/{owner}/{repo}/pulls` (plus their single-item variants),
+ * `repos/{owner}/{repo}/labels` (the label editor's live catalog), and the two
  * paths the RepoSwitcher needs: `user/repos` (live repo list) and `user`
  * (profile). Nothing else is allowed — the relay is not re-opened to arbitrary
  * paths.
@@ -131,7 +132,7 @@ export function isAllowedOrigin(
  * repository-id form (`https://api.github.com/repositories/{id}/issues?…`),
  * even when the original request used `repos/{owner}/{repo}/…`. The connector
  * follows that `Link` verbatim, so the relay must accept the repository-id
- * form for the same read-only `issues`/`pulls` resources.
+ * form for the same read-only `issues`/`pulls`/`labels` resources.
  */
 export function isAllowedPath(path: string[]): boolean {
   // RepoSwitcher endpoints: `user` and `user/repos` (exactly, no deeper).
@@ -140,7 +141,7 @@ export function isAllowedPath(path: string[]): boolean {
 
   if (path.length < 3 || (path[0] !== "repos" && path[0] !== "repositories")) return false;
   const resource = path[0] === "repositories" ? path[2] : path[3];
-  if (resource !== "issues" && resource !== "pulls") return false;
+  if (resource !== "issues" && resource !== "pulls" && resource !== "labels") return false;
   return true;
 }
 

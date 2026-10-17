@@ -118,6 +118,19 @@ describe("isAllowedPath", () => {
     expect(isAllowedPath(["repositories", "1148441904", "issues", "21"])).toBe(true);
   });
 
+  it("allows repos/{owner}/{repo}/labels for the label editor", () => {
+    expect(isAllowedPath(["repos", "meperdonas", "meperboard", "labels"])).toBe(true);
+  });
+
+  it("allows the repository-id labels form for the same read", () => {
+    expect(isAllowedPath(["repositories", "1148441904", "labels"])).toBe(true);
+  });
+
+  it("still rejects unknown resources in both repo forms", () => {
+    expect(isAllowedPath(["repos", "meperdonas", "meperboard", "milestones"])).toBe(false);
+    expect(isAllowedPath(["repositories", "1148441904", "milestones"])).toBe(false);
+  });
+
   it("rejects the repository-id form for non-issue/pull resources", () => {
     expect(isAllowedPath(["repositories", "1148441904", "comments"])).toBe(false);
     expect(isAllowedPath(["repositories", "1148441904"])).toBe(false);

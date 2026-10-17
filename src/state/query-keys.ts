@@ -4,6 +4,7 @@ export const queryKeys = {
   backlog: ["backlog"] as const,
   issueDetail: ["issue-detail"] as const,
   issueComments: ["issue-comments"] as const,
+  repoLabels: ["repo-labels"] as const,
   localCards: ["local-cards"] as const,
   userRepos: ["user", "repos"] as const,
 };
