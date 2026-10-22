@@ -186,7 +186,7 @@ describe("CommandPalette", () => {
   it("runs the Sync now quick action through the proxy fetcher", async () => {
     mockFetch({
       "/api/auth/me": () => jsonResponse({}, 401),
-      "/api/github/repos/MeperDonas/MeperPOS/issues?state=all&per_page=100": () =>
+      "/api/github/repos/meperdev/MeperPOS/issues?state=all&per_page=100": () =>
         jsonResponse([]),
     });
     render(<CommandPalette />, { wrapper: queryWrapper(client) });
@@ -197,7 +197,7 @@ describe("CommandPalette", () => {
 
     await waitFor(() =>
       expect(vi.mocked(fetch)).toHaveBeenCalledWith(
-        "/api/github/repos/MeperDonas/MeperPOS/issues?state=all&per_page=100",
+        "/api/github/repos/meperdev/MeperPOS/issues?state=all&per_page=100",
       ),
     );
   });

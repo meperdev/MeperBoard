@@ -89,7 +89,7 @@ describe("useCreateIssue", () => {
     });
 
     expect(fetcher).toHaveBeenCalledWith(
-      "https://api.github.com/repos/MeperDonas/MeperPOS/issues",
+      "https://api.github.com/repos/meperdev/MeperPOS/issues",
       expect.objectContaining({ method: "POST" }),
     );
   });

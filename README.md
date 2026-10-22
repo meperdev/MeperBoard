@@ -73,7 +73,7 @@ Read-only GitHub sync, offline-first storage, keyboard-first UX — with the pol
 ### Install
 
 ```bash
-git clone https://github.com/MeperDonas/MeperBoard.git
+git clone https://github.com/meperdev/MeperBoard.git
 cd MeperBoard
 npm install
 ```
@@ -208,7 +208,7 @@ Contributions are welcome! Here's how to get started:
 
 Released under the [MIT License](./LICENSE).
 
-Copyright © 2026 [MeperDonas](https://github.com/MeperDonas).
+Copyright © 2026 [Santiago Villabona (meperdev)](https://github.com/meperdev).
 
 ---
 

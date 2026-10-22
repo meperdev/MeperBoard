@@ -122,7 +122,7 @@ export function getRepoColorScheme(repoId?: string | null): RepoColorScheme {
 }
 
 /**
- * Extract short display name for a repository (e.g. "MeperBoard" from "MeperDonas/MeperBoard").
+ * Extract short display name for a repository (e.g. "MeperBoard" from "meperdev/MeperBoard").
  */
 export function getRepoShortName(repoId?: string | null): string | null {
   if (!repoId) return null;

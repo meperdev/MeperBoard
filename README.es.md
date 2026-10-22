@@ -73,7 +73,7 @@ Sincronización de solo lectura con GitHub, almacenamiento offline-first, UX pen
 ### Instalación
 
 ```bash
-git clone https://github.com/MeperDonas/MeperBoard.git
+git clone https://github.com/meperdev/MeperBoard.git
 cd MeperBoard
 npm install
 ```
@@ -208,7 +208,7 @@ npm run test
 
 Publicado bajo la [Licencia MIT](./LICENSE).
 
-Copyright © 2026 [MeperDonas](https://github.com/MeperDonas).
+Copyright © 2026 [Santiago Villabona (meperdev)](https://github.com/meperdev).
 
 ---
 

@@ -39,10 +39,10 @@ const MEPERPOS_ISSUES = [
 ];
 
 function FlowProbe({ fetcher }: { fetcher: (url: string) => Promise<Response> }) {
-  const sync = useSync({ owner: "MeperDonas", name: "MeperPOS", fetcher });
+  const sync = useSync({ owner: "meperdev", name: "MeperPOS", fetcher });
   const board = useBoard();
   const backlog = useBacklog();
-  const detail = useIssueDetail("MeperDonas/MeperPOS", 8);
+  const detail = useIssueDetail("meperdev/MeperPOS", 8);
 
   const boardCards = (board.data?.columns ?? []).flatMap((column) => column.cards);
   const backlogCards = backlog.data ?? [];
@@ -91,7 +91,7 @@ describe("sync → board → backlog → detail integration", () => {
 
     // Read-only: the connector fetched only the issues GET endpoint.
     expect(fetcher).toHaveBeenCalledWith(
-      "https://api.github.com/repos/MeperDonas/MeperPOS/issues?state=all&per_page=100",
+      "https://api.github.com/repos/meperdev/MeperPOS/issues?state=all&per_page=100",
     );
   });
 

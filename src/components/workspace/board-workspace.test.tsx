@@ -56,7 +56,7 @@ const createdIssuePayload = {
   title: "Fix login",
   body: "",
   state: "open",
-  html_url: "https://github.com/MeperDonas/MeperPOS/issues/42",
+  html_url: "https://github.com/meperdev/MeperPOS/issues/42",
   updated_at: "2026-10-16T12:00:00Z",
   labels: [],
 };
@@ -111,7 +111,7 @@ describe("BoardWorkspace", () => {
 
       // The default source repo is MeperPOS.
       expect(fetchMock).toHaveBeenCalledWith(
-        "/api/github/repos/MeperDonas/MeperPOS/issues?state=all&per_page=100",
+        "/api/github/repos/meperdev/MeperPOS/issues?state=all&per_page=100",
       );
     } finally {
       vi.unstubAllGlobals();
@@ -165,7 +165,7 @@ describe("BoardWorkspace", () => {
       );
 
       expect(fetchMock).toHaveBeenCalledWith(
-        "/api/github/repos/MeperDonas/MeperPOS/issues?state=all&per_page=100",
+        "/api/github/repos/meperdev/MeperPOS/issues?state=all&per_page=100",
       );
     } finally {
       vi.unstubAllGlobals();
@@ -190,7 +190,7 @@ describe("BoardWorkspace", () => {
       );
 
       expect(fetchMock).not.toHaveBeenCalledWith(
-        "/api/github/repos/MeperDonas/MeperPOS/issues?state=all&per_page=100",
+        "/api/github/repos/meperdev/MeperPOS/issues?state=all&per_page=100",
       );
     } finally {
       vi.unstubAllGlobals();

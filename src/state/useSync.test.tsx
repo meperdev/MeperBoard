@@ -6,7 +6,7 @@ import { loadLastSync, saveLastSync } from "../lib/last-sync";
 import { createTestQueryClient, queryWrapper, resetDb } from "./test-utils";
 import { useActiveRepo } from "./use-repos";
 import { useBoard } from "./useBoard";
-import { useSync } from "./useSync";
+import { DEFAULT_REPO, DEFAULT_REPO_ID, useSync } from "./useSync";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -230,5 +230,17 @@ describe("useActiveRepo", () => {
     render(<ActiveRepoProbe />, { wrapper: queryWrapper(client) });
 
     await waitFor(() => expect(screen.getByTestId("active-repo")).toHaveTextContent("none"));
+  });
+});
+
+describe("DEFAULT_REPO", () => {
+  it("points at the renamed account while keeping the tracked repository name", () => {
+    expect(DEFAULT_REPO.owner).toBe("meperdev");
+    expect(DEFAULT_REPO.name).toBe("MeperPOS");
+  });
+
+  it("derives DEFAULT_REPO_ID from owner/name", () => {
+    expect(DEFAULT_REPO_ID).toBe("meperdev/MeperPOS");
+    expect(DEFAULT_REPO_ID).toBe(`${DEFAULT_REPO.owner}/${DEFAULT_REPO.name}`);
   });
 });
