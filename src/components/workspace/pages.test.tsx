@@ -65,7 +65,7 @@ describe("BacklogPage", () => {
       await waitFor(() => expect(screen.getByText("Expenses slice 1")).toBeInTheDocument());
 
       expect(fetchMock).toHaveBeenCalledWith(
-        "/api/github/repos/MeperDonas/MeperPOS/issues?state=all&per_page=100",
+        "/api/github/repos/meperdev/MeperPOS/issues?state=all&per_page=100",
       );
     } finally {
       vi.unstubAllGlobals();
@@ -80,7 +80,7 @@ describe("IssuePage", () => {
   it("renders the issue detail for the selected number", async () => {
     await githubItemRepo.upsert(
       makeGithubItem({
-        repo: "MeperDonas/MeperPOS",
+        repo: "meperdev/MeperPOS",
         number: 8,
         title: "Expenses slice 1",
         body: "details",

@@ -9,7 +9,7 @@ import { queryKeys } from "./query-keys";
 const GITHUB_API_ORIGIN = "https://api.github.com";
 
 /** Default source repository — MeperPOS is the board's first tracked repo. */
-export const DEFAULT_REPO = { owner: "MeperDonas", name: "MeperPOS" } as const;
+export const DEFAULT_REPO = { owner: "meperdev", name: "MeperPOS" } as const;
 
 /** Read-path default repo id (`owner/name`) used when no active repo has been
  * selected. Mirrors `DEFAULT_REPO` so the board/backlog fall back to the same

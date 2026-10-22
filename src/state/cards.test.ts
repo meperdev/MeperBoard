@@ -217,12 +217,12 @@ describe("loadCards / loadBoard (IndexedDB)", () => {
   });
 
   it("defaults to the DEFAULT_REPO when no active repo is given", async () => {
-    await githubItemRepo.upsert(makeGithubItem({ repo: "MeperDonas/MeperPOS", number: 1 }));
+    await githubItemRepo.upsert(makeGithubItem({ repo: "meperdev/MeperPOS", number: 1 }));
     await githubItemRepo.upsert(makeGithubItem({ repo: "acme/widgets", number: 1 }));
 
     const cards = await loadCards();
     expect(cards).toHaveLength(1);
-    expect(cards[0].repo).toBe("MeperDonas/MeperPOS");
+    expect(cards[0].repo).toBe("meperdev/MeperPOS");
   });
 
   it("loads cards from multiple active repos", async () => {
@@ -237,9 +237,9 @@ describe("loadCards / loadBoard (IndexedDB)", () => {
   });
 
   it("falls back to DEFAULT_REPO_ID when given an empty array", async () => {
-    await githubItemRepo.upsert(makeGithubItem({ repo: "MeperDonas/MeperPOS", number: 1 }));
+    await githubItemRepo.upsert(makeGithubItem({ repo: "meperdev/MeperPOS", number: 1 }));
     const cards = await loadCards([]);
     expect(cards).toHaveLength(1);
-    expect(cards[0].repo).toBe("MeperDonas/MeperPOS");
+    expect(cards[0].repo).toBe("meperdev/MeperPOS");
   });
 });
